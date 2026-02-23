@@ -100,6 +100,8 @@ async def settings_page(
 ):
     """Settings page."""
     smtp = _get_smtp_settings(db)
+    backup_destination = _get_setting(db, "backup_destination", settings.backup_destination)
+    plex_data_path = _get_setting(db, "plex_data_path", settings.plex_data_path)
 
     return templates.TemplateResponse(
         "pages/settings.html",
@@ -114,6 +116,8 @@ async def settings_page(
             "smtp_tls": smtp["smtp_tls"],
             "backup_log_path": settings.backup_log_path,
             "backup_script_path": settings.backup_script_path,
+            "backup_destination": backup_destination,
+            "plex_data_path": plex_data_path,
             "cron_edit_enabled": settings.cron_edit_enabled,
             "csrf_token": generate_csrf_token(),
         },
@@ -161,6 +165,24 @@ async def update_smtp_settings(
     _set_setting(db, "smtp_from", smtp_from.strip())
     _set_setting(db, "smtp_tls", smtp_tls.strip())
     return RedirectResponse(url="/settings?success=SMTP+settings+updated", status_code=303)
+
+
+@router.post("/settings/backup-info")
+async def update_backup_info(
+    request: Request,
+    backup_destination: str = Form(""),
+    plex_data_path: str = Form(""),
+    csrf_token: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """Update backup destination and Plex data path."""
+    if not validate_csrf_token(csrf_token):
+        return RedirectResponse(url="/settings", status_code=303)
+
+    _set_setting(db, "backup_destination", backup_destination.strip())
+    _set_setting(db, "plex_data_path", plex_data_path.strip())
+    return RedirectResponse(url="/settings?success=Backup+info+updated", status_code=303)
 
 
 @router.post("/settings/test-email")

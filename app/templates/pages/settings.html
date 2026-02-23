@@ -14,6 +14,26 @@
 <div class="alert alert-success">{{ request.query_params.get('success') }}</div>
 {% endif %}
 
+<!-- Backup Paths -->
+<div class="settings-section">
+    <h3>Backup Paths</h3>
+    <form method="post" action="/settings/backup-info">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label class="form-label" for="plex_data_path">Plex Data Path (Source)</label>
+            <input type="text" id="plex_data_path" name="plex_data_path" class="form-input" style="max-width: 600px;"
+                   value="{{ plex_data_path }}" placeholder="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="backup_destination">Backup Destination</label>
+            <input type="text" id="backup_destination" name="backup_destination" class="form-input" style="max-width: 600px;"
+                   value="{{ backup_destination }}" placeholder="rsync://user@192.168.1.100/module/plex">
+        </div>
+        <button type="submit" class="btn btn-blue btn-sm">Save Backup Paths</button>
+    </form>
+    <p class="text-xs text-muted" style="margin-top: 0.75rem;">Where Plex data lives and where backups go. Shown on the dashboard.</p>
+</div>
+
 <!-- Email Settings -->
 <div class="settings-section">
     <h3>Email Notifications</h3>

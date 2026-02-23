@@ -7,7 +7,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session as DBSession
 
+from app.config import settings
 from app.dependencies import get_current_user, get_db
+from app.models.setting import AppSetting
 from app.models.user import User
 from app.services.metrics import (
     get_backup_type_counts,
@@ -33,6 +35,12 @@ async def dashboard(
     daily_sizes = get_daily_sizes(db, days=days)
     recent = get_recent_backups(db, limit=10)
 
+    # Read backup paths from DB, falling back to config
+    dest_row = db.query(AppSetting).filter(AppSetting.key == "backup_destination").first()
+    backup_destination = dest_row.value if dest_row else settings.backup_destination
+    path_row = db.query(AppSetting).filter(AppSetting.key == "plex_data_path").first()
+    plex_data_path = path_row.value if path_row else settings.plex_data_path
+
     return templates.TemplateResponse(
         "pages/dashboard.html",
         {
@@ -44,5 +52,7 @@ async def dashboard(
             "daily_sizes_json": json.dumps(daily_sizes),
             "recent_backups": recent,
             "selected_days": days,
+            "backup_destination": backup_destination,
+            "plex_data_path": plex_data_path,
         },
     )

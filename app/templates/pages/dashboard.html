@@ -21,6 +21,23 @@
     </div>
 </div>
 
+{% if backup_destination or plex_data_path %}
+<div class="info-bar">
+    {% if plex_data_path %}
+    <div class="info-bar-item">
+        <span class="info-bar-label">Source</span>
+        <span class="info-bar-value">{{ plex_data_path }}</span>
+    </div>
+    {% endif %}
+    {% if backup_destination %}
+    <div class="info-bar-item">
+        <span class="info-bar-label">Destination</span>
+        <span class="info-bar-value">{{ backup_destination }}</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Stat Cards -->
 <div class="stats-grid">
     <div class="stat-card">

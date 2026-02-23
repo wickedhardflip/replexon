@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # Backup paths (server-side)
     backup_log_path: str = "/var/log/plex-backup.log"
     backup_script_path: str = "/usr/local/bin/backup-plex.sh"
+    backup_destination: str = ""
+    plex_data_path: str = ""
 
     # Cron management
     cron_edit_enabled: bool = False
