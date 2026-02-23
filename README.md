@@ -16,6 +16,8 @@ A self-hosted backup system and monitoring dashboard for Plex Media Server. RePl
 
 **This project is provided as-is, free and open source under the MIT license.** It was built to solve a real problem on a real Plex server and is shared in the hope that it may be useful to others running similar setups. No warranty or support is provided -- see [Disclaimer](#disclaimer) below.
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/punchybuttons)
+
 ---
 
 ## Screenshots
@@ -377,6 +379,12 @@ See the [MIT License](LICENSE) for full terms.
 ## Contributing
 
 Contributions are welcome. If you find a bug, have a feature request, or want to adapt RePlexOn for a different backup setup, feel free to open an issue or pull request.
+
+## Support
+
+If you find RePlexOn useful, consider buying me a coffee:
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/punchybuttons)
 
 ## License
 
