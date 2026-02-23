@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Backup Logs - RePlexOn{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Backup Logs</h2>
+    <span class="text-sm text-muted">{{ total }} total records</span>
+</div>
+
+<!-- Filters -->
+<div class="card" style="margin-bottom: 1.25rem;">
+    <form method="get" action="/logs"
+          hx-get="/logs" hx-target="#log-results" hx-push-url="true"
+          class="flex items-center gap-1" style="flex-wrap: wrap;">
+        <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+            <select name="backup_type" class="form-select" onchange="this.form.requestSubmit()">
+                <option value="">All Types</option>
+                <option value="daily_mirror" {{ 'selected' if backup_type == 'daily_mirror' }}>Daily Mirror</option>
+                <option value="snapshot" {{ 'selected' if backup_type == 'snapshot' }}>Snapshot</option>
+                <option value="cleanup" {{ 'selected' if backup_type == 'cleanup' }}>Cleanup</option>
+                <option value="manual" {{ 'selected' if backup_type == 'manual' }}>Manual</option>
+                <option value="script_backup" {{ 'selected' if backup_type == 'script_backup' }}>Config Backup</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 120px;">
+            <select name="status" class="form-select" onchange="this.form.requestSubmit()">
+                <option value="">All Statuses</option>
+                <option value="success" {{ 'selected' if status_filter == 'success' }}>Success</option>
+                <option value="failure" {{ 'selected' if status_filter == 'failure' }}>Failure</option>
+                <option value="running" {{ 'selected' if status_filter == 'running' }}>Running</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+            <input type="text" name="search" class="form-input" placeholder="Search logs..."
+                   value="{{ search }}">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+        {% if backup_type or status_filter or search %}
+        <a href="/logs" class="btn btn-secondary btn-sm"
+           hx-get="/logs" hx-target="#log-results" hx-push-url="true">Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Results -->
+<div class="card" id="log-results">
+    {% include "components/log_table.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDetail(row) {
+    var detail = row.nextElementSibling;
+    var icon = row.querySelector('.expand-icon');
+    if (detail && detail.classList.contains('log-detail')) {
+        var showing = detail.style.display !== 'none';
+        detail.style.display = showing ? 'none' : 'table-row';
+        icon.textContent = showing ? '\u25B6' : '\u25BC';
+        row.classList.toggle('expanded', !showing);
+    }
+}
+</script>
+{% endblock %}

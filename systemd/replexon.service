@@ -1,0 +1,26 @@
+[Unit]
+Description=RePlexOn - Plex Backup Dashboard
+After=network.target
+
+[Service]
+Type=exec
+User=plex
+Group=plex
+WorkingDirectory=/opt/replexon
+Environment=PATH=/opt/replexon/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/replexon/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9847
+Restart=always
+RestartSec=5
+
+# Security hardening
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=/opt/replexon/data
+ReadOnlyPaths=/var/log/plex-backup.log /var/log/plex-backup-tracking.log
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

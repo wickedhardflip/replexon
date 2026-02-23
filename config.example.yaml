@@ -1,0 +1,24 @@
+# RePlexOn Backup Configuration
+# This file documents backup paths for reference.
+# Primary configuration is via .env file.
+
+backup:
+  # Path to the backup log file parsed by RePlexOn
+  log_path: /var/log/plex-backup.log
+
+  # Directory containing backup scripts
+  script_dir: /opt/plex-backup
+
+  # Plex data directory (source for backups)
+  plex_data: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
+
+  # Backup destination (NAS mount point)
+  destination: /mnt/nas/plex-backup
+
+  # Snapshot directory
+  snapshots: /mnt/nas/plex-snapshots
+
+email:
+  # Email is configured via msmtp on the server
+  # Config file: ~/.msmtprc
+  # Notification recipient is set in the web UI under Settings

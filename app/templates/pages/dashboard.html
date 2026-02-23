@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - RePlexOn{% endblock %}
+{% block head %}
+<script src="/static/js/chart.min.js" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Dashboard</h2>
+    <div class="flex items-center gap-1">
+        <div class="next-backup">
+            <span class="pulse"></span>
+            <span>System active</span>
+        </div>
+        <div class="time-filters" style="margin-left: 1rem;">
+            <a href="/dashboard?days=7" class="time-filter-btn {{ 'active' if selected_days == 7 }}">7d</a>
+            <a href="/dashboard?days=30" class="time-filter-btn {{ 'active' if selected_days == 30 }}">30d</a>
+            <a href="/dashboard?days=90" class="time-filter-btn {{ 'active' if selected_days == 90 }}">90d</a>
+            <a href="/dashboard?days=365" class="time-filter-btn {{ 'active' if selected_days == 365 }}">All</a>
+        </div>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Last Backup</div>
+            {% if stats.last_backup %}
+            <div class="stat-value">
+                {% if stats.last_backup.status == 'success' %}
+                <span class="text-success">OK</span>
+                {% elif stats.last_backup.status == 'failure' %}
+                <span class="text-danger">FAIL</span>
+                {% else %}
+                <span class="text-warning">RUN</span>
+                {% endif %}
+            </div>
+            <div class="stat-sub">{{ stats.last_backup.started_at.strftime('%b %d, %I:%M %p') }}</div>
+            {% else %}
+            <div class="stat-value text-muted">--</div>
+            <div class="stat-sub">No backups yet</div>
+            {% endif %}
+        </div>
+        <div class="stat-chart">
+            <canvas id="lastBackupChart" width="52" height="52"></canvas>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Total Size</div>
+            {% if stats.latest_size_bytes %}
+            <div class="stat-value">{{ (stats.latest_size_bytes / 1073741824) | round(1) }} <span class="text-xs text-muted">GB</span></div>
+            {% else %}
+            <div class="stat-value text-muted">--</div>
+            {% endif %}
+            <div class="stat-sub">Latest backup</div>
+        </div>
+        <div class="stat-chart">
+            <canvas id="sizeChart" width="52" height="52"></canvas>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Success Rate</div>
+            <div class="stat-value">{{ stats.success_rate }}<span class="text-xs text-muted">%</span></div>
+            <div class="stat-sub {{ 'success' if stats.success_rate >= 95 else ('warning' if stats.success_rate >= 80 else 'danger') }}">
+                {{ stats.failure_count }} failure{{ 's' if stats.failure_count != 1 }} in period
+            </div>
+        </div>
+        <div class="stat-chart">
+            <canvas id="successChart" width="52" height="52"></canvas>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-info">
+            <div class="stat-label">Backups Run</div>
+            <div class="stat-value">{{ stats.total_backups }}</div>
+            <div class="stat-sub">Last {{ selected_days }} days</div>
+        </div>
+        <div class="stat-chart">
+            <canvas id="totalChart" width="52" height="52"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>Backup Size Over Time</h3>
+        <div class="chart-container bar-chart">
+            <canvas id="sizeBarChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3>By Type</h3>
+        <div class="chart-container doughnut-chart">
+            <canvas id="typeDoughnut"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Backups Table -->
+<div class="card">
+    <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+        <h3 style="margin-bottom: 0;">Recent Backups</h3>
+        <a href="/logs" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>Size</th>
+                    <th>Duration</th>
+                    <th>Trigger</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in recent_backups %}
+                <tr style="cursor: pointer;" onclick="window.location='/logs/{{ backup.id }}'">
+                    <td><span class="badge badge-{{ backup.backup_type }}">{{ backup.backup_type | replace('_', ' ') }}</span></td>
+                    <td><span class="badge badge-{{ backup.status }}">{{ backup.status }}</span></td>
+                    <td>{{ backup.started_at.strftime('%b %d, %I:%M %p') }}</td>
+                    <td>{{ backup.size_display }}</td>
+                    <td>{{ backup.duration_display }}</td>
+                    <td class="text-xs text-muted">{{ backup.triggered_by }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="empty-state" style="padding: 2rem;">
+                        <h3>No backups recorded yet</h3>
+                        <p>Backups will appear here once the log parser runs.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const typeCounts = {{ type_counts_json | safe }};
+    const dailySizes = {{ daily_sizes_json | safe }};
+    const successRate = {{ stats.success_rate }};
+    const totalBackups = {{ stats.total_backups }};
+</script>
+<script src="/static/js/dashboard.js" defer></script>
+{% endblock %}

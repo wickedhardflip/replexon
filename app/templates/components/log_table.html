@@ -1,0 +1,93 @@
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 30px;"></th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Size</th>
+                <th>Transferred</th>
+                <th>Duration</th>
+                <th>Trigger</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for backup in backups %}
+            <tr class="log-row" onclick="toggleDetail(this)" style="cursor: pointer;">
+                <td class="expand-icon">&#9654;</td>
+                <td><span class="badge badge-{{ backup.backup_type }}">{{ backup.backup_type | replace('_', ' ') }}</span></td>
+                <td><span class="badge badge-{{ backup.status }}">{{ backup.status }}</span></td>
+                <td>{{ backup.started_at.strftime('%Y-%m-%d') }}</td>
+                <td>{{ backup.started_at.strftime('%H:%M') }}{% if backup.finished_at %} &ndash; {{ backup.finished_at.strftime('%H:%M') }}{% endif %}</td>
+                <td>{{ backup.size_display }}</td>
+                <td>{{ backup.transferred_display }}</td>
+                <td>{{ backup.duration_display }}</td>
+                <td class="text-xs text-muted">{{ backup.triggered_by }}</td>
+            </tr>
+            <tr class="log-detail" style="display: none;">
+                <td colspan="9" style="padding: 0;">
+                    <div class="log-detail-inner">
+                        <div class="log-detail-grid">
+                            <div><span class="settings-label">Backup ID</span> <span class="text-sm">#{{ backup.id }}</span></div>
+                            <div><span class="settings-label">Started</span> <span class="text-sm">{{ backup.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</span></div>
+                            <div><span class="settings-label">Finished</span> <span class="text-sm">{{ backup.finished_at.strftime('%Y-%m-%d %H:%M:%S') if backup.finished_at else '-' }}</span></div>
+                            <div><span class="settings-label">Total Size</span> <span class="text-sm">{{ backup.size_display }}</span></div>
+                            <div><span class="settings-label">Transferred</span> <span class="text-sm">{{ backup.transferred_display }}</span></div>
+                            <div><span class="settings-label">Duration</span> <span class="text-sm">{{ backup.duration_display }}</span></div>
+                        </div>
+                        {% if backup.error_message %}
+                        <div class="alert alert-error" style="margin-top: 0.75rem; margin-bottom: 0;">
+                            <strong>Error:</strong> {{ backup.error_message }}
+                        </div>
+                        {% endif %}
+                        {% if backup.raw_log %}
+                        <div style="margin-top: 0.75rem;">
+                            <div class="log-raw">{{ backup.raw_log }}</div>
+                        </div>
+                        {% endif %}
+                        <div style="margin-top: 0.75rem;">
+                            <a href="/logs/{{ backup.id }}" class="btn btn-secondary btn-sm">View Full Detail</a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9" class="empty-state" style="padding: 2rem;">
+                    <h3>No backups found</h3>
+                    <p>Try adjusting your filters.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% set qs = "backup_type=" ~ backup_type ~ "&status=" ~ status_filter ~ "&search=" ~ search %}
+    {% if page > 1 %}
+    <a href="/logs?page={{ page - 1 }}&{{ qs }}"
+       hx-get="/logs?page={{ page - 1 }}&{{ qs }}"
+       hx-target="#log-results" hx-push-url="true">Prev</a>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+        <a href="/logs?page={{ p }}&{{ qs }}"
+           hx-get="/logs?page={{ p }}&{{ qs }}"
+           hx-target="#log-results" hx-push-url="true">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 3 %}
+        <span class="text-muted">&hellip;</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="/logs?page={{ page + 1 }}&{{ qs }}"
+       hx-get="/logs?page={{ page + 1 }}&{{ qs }}"
+       hx-target="#log-results" hx-push-url="true">Next</a>
+    {% endif %}
+</div>
+{% endif %}

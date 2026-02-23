@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Settings - RePlexOn{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Settings</h2>
+</div>
+
+{% if request.query_params.get('error') %}
+<div class="alert alert-error">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+{% if request.query_params.get('success') %}
+<div class="alert alert-success">{{ request.query_params.get('success') }}</div>
+{% endif %}
+
+<!-- Email Settings -->
+<div class="settings-section">
+    <h3>Email Notifications</h3>
+    <form method="post" action="/settings/email">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label class="form-label" for="email_recipient">Notification Recipient</label>
+            <input type="email" id="email_recipient" name="email_recipient" class="form-input settings-input"
+                   value="{{ email_recipient }}" placeholder="you@example.com">
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="submit" class="btn btn-blue btn-sm">Save Email Settings</button>
+        </div>
+    </form>
+    <form method="post" action="/settings/test-email" style="margin-top: 0.75rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary btn-sm">Send Test Email</button>
+    </form>
+</div>
+
+<!-- SMTP Configuration -->
+<div class="settings-section">
+    <h3>SMTP Server</h3>
+    <form method="post" action="/settings/smtp">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; max-width: 500px;">
+            <div class="form-group">
+                <label class="form-label" for="smtp_host">SMTP Host</label>
+                <input type="text" id="smtp_host" name="smtp_host" class="form-input"
+                       value="{{ smtp_host }}" placeholder="smtp.gmail.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="smtp_port">Port</label>
+                <input type="text" id="smtp_port" name="smtp_port" class="form-input"
+                       value="{{ smtp_port }}" placeholder="587">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="smtp_from">From Address</label>
+            <input type="email" id="smtp_from" name="smtp_from" class="form-input settings-input"
+                   value="{{ smtp_from }}" placeholder="you@gmail.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">TLS Encryption</label>
+            <div style="display: flex; gap: 1.5rem; padding: 0.375rem 0;">
+                <label style="display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--text-primary); cursor: pointer;">
+                    <input type="radio" name="smtp_tls" value="on" {{ 'checked' if smtp_tls == 'on' else '' }}> Enabled
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--text-primary); cursor: pointer;">
+                    <input type="radio" name="smtp_tls" value="off" {{ 'checked' if smtp_tls != 'on' else '' }}> Disabled
+                </label>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-blue btn-sm">Save SMTP Settings</button>
+    </form>
+    <p class="text-xs text-muted" style="margin-top: 0.75rem;">SMTP settings are used by RePlexOn for sending notifications. If msmtp is installed, settings are auto-detected on first setup.</p>
+</div>
+
+<!-- Server Paths -->
+<div class="settings-section">
+    <h3>Server Configuration</h3>
+    <div class="settings-grid">
+        <div class="settings-row">
+            <span class="settings-label">Backup Log</span>
+            <span class="settings-value font-mono">{{ backup_log_path }}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">Backup Script</span>
+            <span class="settings-value font-mono">{{ backup_script_path }}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">Cron Editing</span>
+            <span class="settings-value">
+                {% if cron_edit_enabled %}
+                <span class="badge badge-success">Enabled</span>
+                {% else %}
+                <span class="badge badge-failure">Disabled</span>
+                {% endif %}
+            </span>
+        </div>
+    </div>
+    <p class="text-xs text-muted" style="margin-top: 0.75rem;">These paths are configured in the <code>.env</code> file on the server.</p>
+</div>
+
+<!-- Change Password -->
+<div class="settings-section">
+    <h3>Change Password</h3>
+    <form method="post" action="/settings/password" style="max-width: 400px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label class="form-label" for="current_password">Current Password</label>
+            <input type="password" id="current_password" name="current_password" class="form-input" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="new_password">New Password</label>
+            <input type="password" id="new_password" name="new_password" class="form-input" required minlength="8">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="confirm_password">Confirm New Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" class="form-input" required minlength="8">
+        </div>
+        <button type="submit" class="btn btn-blue btn-sm">Change Password</button>
+    </form>
+</div>
+
+<!-- About -->
+<div class="settings-section">
+    <h3>About RePlexOn</h3>
+    <p class="text-sm" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
+        <span class="text-orange">Re</span><span class="text-blue">Plex</span><span class="text-orange">On</span> &mdash;
+        <em>"Previously on your Plex server..."</em>
+    </p>
+    <p class="text-xs text-muted">Plex backup monitoring dashboard. Built with FastAPI + HTMX + Chart.js.</p>
+    <p class="text-xs text-muted mt-1">Port: 9847 &middot; <a href="https://github.com/wickedhardflip/replexon" target="_blank">GitHub</a></p>
+</div>
+{% endblock %}

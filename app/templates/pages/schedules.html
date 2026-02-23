@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Schedules - RePlexOn{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Backup Schedules</h2>
+    <form method="post" action="/schedules/run-now" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-primary" {{ 'disabled' if not can_trigger }}>
+            &#9654; Run Now
+        </button>
+    </form>
+</div>
+
+{% if not can_trigger and cooldown_msg %}
+<div class="alert alert-info">{{ cooldown_msg }}</div>
+{% endif %}
+
+{% if request.query_params.get('error') %}
+<div class="alert alert-error">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+{% if request.query_params.get('success') %}
+<div class="alert alert-success">{{ request.query_params.get('success') }}</div>
+{% endif %}
+
+{% if cron_entries %}
+    {% for entry in cron_entries %}
+    <div class="card" style="margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h4 style="margin: 0 0 0.25rem 0;">{{ entry.label }}</h4>
+                <div class="text-sm text-muted" style="margin-bottom: 0.25rem;">{{ entry.schedule_display }}</div>
+                <code class="text-xs" style="color: var(--text-secondary);">{{ entry.cron_expression }}</code>
+                <span class="text-xs text-muted" style="margin-left: 0.5rem;">{{ entry.command }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <h3>No backup schedules found</h3>
+            <p>No cron entries matching backup scripts were found in the crontab for user <code>{{ cron_user }}</code>.</p>
+            <p class="text-xs text-muted mt-1">Make sure the app has permission to read the crontab (sudo access).</p>
+        </div>
+    </div>
+{% endif %}
+
+{% if not cron_edit_enabled %}
+<div class="alert alert-info mt-2">
+    Schedule editing is in <strong>read-only mode</strong>. To enable editing, set <code>CRON_EDIT_ENABLED=true</code> in your .env file.
+    <br>You can edit schedules directly via SSH: <code class="font-mono">sudo crontab -e -u root</code>
+</div>
+{% endif %}
+{% endblock %}

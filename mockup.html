@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RePlexOn - Theme Mockup</title>
+    <link rel="stylesheet" href="app/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Dark Top Navigation -->
+    <nav class="top-nav">
+        <a href="#" class="nav-brand">
+            <h1>RePlexOn</h1>
+        </a>
+
+        <ul class="nav-links">
+            <li><a href="#" class="active"><span class="nav-icon">&#9632;</span> <span>Dashboard</span></a></li>
+            <li><a href="#"><span class="nav-icon">&#9776;</span> <span>Logs</span></a></li>
+            <li><a href="#"><span class="nav-icon">&#9202;</span> <span>Schedules</span></a></li>
+            <li><a href="#"><span class="nav-icon">&#9881;</span> <span>Settings</span></a></li>
+        </ul>
+
+        <div class="nav-right">
+            <div class="nav-user">
+                <span class="username">admin</span>
+                <a href="#" class="logout-btn">Sign out</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Light Main Content -->
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h2>Dashboard</h2>
+                <p class="page-subtitle">Your backup summary and activity</p>
+            </div>
+            <div class="flex items-center gap-1">
+                <div class="next-backup">
+                    <span class="pulse"></span>
+                    <span>Next: Sun 3:00 AM</span>
+                </div>
+                <div class="time-filters" style="margin-left: 1rem;">
+                    <button class="time-filter-btn">7d</button>
+                    <button class="time-filter-btn active">30d</button>
+                    <button class="time-filter-btn">90d</button>
+                    <button class="time-filter-btn">All</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stat Cards (white tiles with colored rings) -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-info">
+                    <div class="stat-label">Last Backup</div>
+                    <div class="stat-value"><span class="text-success">OK</span></div>
+                    <div class="stat-sub">Today, 3:00 AM</div>
+                </div>
+                <div class="stat-chart">
+                    <canvas id="lastBackupChart" width="52" height="52"></canvas>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-info">
+                    <div class="stat-label">Total Size</div>
+                    <div class="stat-value">6.4 <span class="text-xs text-muted">GB</span></div>
+                    <div class="stat-sub success">+0.2 GB today</div>
+                </div>
+                <div class="stat-chart">
+                    <canvas id="sizeChart" width="52" height="52"></canvas>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-info">
+                    <div class="stat-label">Success Rate</div>
+                    <div class="stat-value">97.3<span class="text-xs text-muted">%</span></div>
+                    <div class="stat-sub success">1 failure in 30 days</div>
+                </div>
+                <div class="stat-chart">
+                    <canvas id="successChart" width="52" height="52"></canvas>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-info">
+                    <div class="stat-label">Backups Run</div>
+                    <div class="stat-value">142</div>
+                    <div class="stat-sub">Last 30 days</div>
+                </div>
+                <div class="stat-chart">
+                    <canvas id="totalChart" width="52" height="52"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+            <div class="chart-card">
+                <h3>Backup Size Over Time</h3>
+                <div class="chart-container bar-chart">
+                    <canvas id="sizeBarChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>By Type</h3>
+                <div class="chart-container doughnut-chart">
+                    <canvas id="typeDoughnut"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Backups Table -->
+        <div class="card">
+            <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+                <h3 style="margin-bottom: 0;">Recent Backups</h3>
+                <a href="#" class="btn btn-secondary btn-sm">View All</a>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Started</th>
+                            <th>Size</th>
+                            <th>Duration</th>
+                            <th>Trigger</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-daily_mirror">daily mirror</span></td>
+                            <td><span class="badge badge-success">success</span></td>
+                            <td>Feb 23, 3:00 AM</td>
+                            <td>6.4 GB</td>
+                            <td>12m 34s</td>
+                            <td class="text-xs text-muted">cron</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-daily_mirror">daily mirror</span></td>
+                            <td><span class="badge badge-success">success</span></td>
+                            <td>Feb 22, 3:00 AM</td>
+                            <td>6.4 GB</td>
+                            <td>11m 58s</td>
+                            <td class="text-xs text-muted">cron</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-cleanup">cleanup</span></td>
+                            <td><span class="badge badge-success">success</span></td>
+                            <td>Feb 16, 4:00 AM</td>
+                            <td>-312 MB</td>
+                            <td>2m 15s</td>
+                            <td class="text-xs text-muted">cron</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-snapshot">snapshot</span></td>
+                            <td><span class="badge badge-success">success</span></td>
+                            <td>Feb 16, 3:30 AM</td>
+                            <td>6.2 GB</td>
+                            <td>18m 42s</td>
+                            <td class="text-xs text-muted">cron</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-daily_mirror">daily mirror</span></td>
+                            <td><span class="badge badge-failure">failure</span></td>
+                            <td>Feb 15, 3:00 AM</td>
+                            <td>-</td>
+                            <td>0m 12s</td>
+                            <td class="text-xs text-muted">cron</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-manual">manual</span></td>
+                            <td><span class="badge badge-success">success</span></td>
+                            <td>Feb 14, 7:22 PM</td>
+                            <td>6.1 GB</td>
+                            <td>14m 08s</td>
+                            <td class="text-xs text-muted">manual</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var PURPLE = '#7c3aed';
+        var PINK = '#e879a8';
+        var GRAY = '#9196a8';
+        var GRAY_LIGHT = '#e5e7ee';
+        var ORANGE = '#E8751A';
+        var TEAL = '#0d9488';
+        var TEXT_MUTED = '#9196a8';
+
+        Chart.defaults.color = TEXT_MUTED;
+        Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        Chart.defaults.font.size = 11;
+
+        function miniDoughnut(id, val, max, color) {
+            var c = document.getElementById(id);
+            if (!c) return;
+            var pct = max > 0 ? Math.min(val / max, 1) : 0;
+            new Chart(c, {
+                type: 'doughnut',
+                data: { datasets: [{ data: [pct * 100, (1 - pct) * 100], backgroundColor: [color, GRAY_LIGHT], borderWidth: 0 }] },
+                options: { cutout: '72%', responsive: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { animateRotate: true, duration: 800 } }
+            });
+        }
+
+        miniDoughnut('lastBackupChart', 1, 1, PURPLE);
+        miniDoughnut('sizeChart', 6.4, 10, PURPLE);
+        miniDoughnut('successChart', 97.3, 100, '#16a34a');
+        miniDoughnut('totalChart', 142, 180, PINK);
+
+        // Bar chart - purple/pink gradient
+        var barCanvas = document.getElementById('sizeBarChart');
+        if (barCanvas) {
+            var labels = [];
+            var sizes = [];
+            for (var i = 29; i >= 0; i--) {
+                var d = new Date(); d.setDate(d.getDate() - i);
+                labels.push((d.getMonth() + 1) + '/' + d.getDate());
+                sizes.push((6.0 + Math.random() * 0.5).toFixed(2));
+            }
+            var ctx = barCanvas.getContext('2d');
+            var grad = ctx.createLinearGradient(0, 0, 0, 220);
+            grad.addColorStop(0, PINK);
+            grad.addColorStop(1, PURPLE);
+
+            new Chart(barCanvas, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'Size (GB)', data: sizes, backgroundColor: grad, borderRadius: 4, borderSkipped: false, maxBarThickness: 24 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e1f2b', titleColor: '#fff', bodyColor: '#c8cad4', padding: 10, cornerRadius: 8, callbacks: { label: function(c) { return c.parsed.y.toFixed(2) + ' GB'; } } } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 15 } },
+                        y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { callback: function(v) { return v + ' GB'; } }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // Doughnut - by type
+        var dc = document.getElementById('typeDoughnut');
+        if (dc) {
+            new Chart(dc, {
+                type: 'doughnut',
+                data: { labels: ['daily mirror', 'snapshot', 'cleanup', 'manual'], datasets: [{ data: [28, 4, 4, 2], backgroundColor: [PURPLE, '#8b5cf6', GRAY, ORANGE], borderWidth: 0, spacing: 2 }] },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 10 } }, tooltip: { backgroundColor: '#1e1f2b', titleColor: '#fff', bodyColor: '#c8cad4', padding: 10, cornerRadius: 8 } } }
+            });
+        }
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Backup #{{ backup.id }} - RePlexOn{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="/logs" class="text-sm text-muted" style="display: block; margin-bottom: 0.5rem;">&larr; Back to Logs</a>
+        <h2>Backup #{{ backup.id }}</h2>
+    </div>
+    <span class="badge badge-{{ backup.status }}" style="font-size: 0.8125rem; padding: 0.375rem 0.875rem;">{{ backup.status | upper }}</span>
+</div>
+
+<!-- Details Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="card">
+        <div class="stat-label">Type</div>
+        <div style="margin-top: 0.375rem;">
+            <span class="badge badge-{{ backup.backup_type }}">{{ backup.backup_type | replace('_', ' ') }}</span>
+        </div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Started</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Finished</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.finished_at.strftime('%Y-%m-%d %H:%M:%S') if backup.finished_at else '-' }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Duration</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.duration_display }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Total Size</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.size_display }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Transferred</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.transferred_display }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Files</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.files_transferred if backup.files_transferred else '-' }}</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Triggered By</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.triggered_by }}</div>
+    </div>
+</div>
+
+{% if backup.error_message %}
+<div class="alert alert-error" style="margin-bottom: 1.25rem;">
+    <strong>Error:</strong> {{ backup.error_message }}
+</div>
+{% endif %}
+
+{% if backup.raw_log %}
+<div class="card">
+    <h3>Raw Log Output</h3>
+    <div class="log-raw">{{ backup.raw_log }}</div>
+</div>
+{% endif %}
+{% endblock %}

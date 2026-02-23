@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RePlexOn{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/htmx.min.js" defer></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% block body %}
+    <nav class="top-nav">
+        <a href="/dashboard" class="nav-brand">
+            <h1>RePlexOn</h1>
+        </a>
+
+        <ul class="nav-links">
+            <li>
+                <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' }}">
+                    <span class="nav-icon">&#9632;</span>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/logs" class="{{ 'active' if active_page == 'logs' }}">
+                    <span class="nav-icon">&#9776;</span>
+                    <span>Logs</span>
+                </a>
+            </li>
+            <li>
+                <a href="/schedules" class="{{ 'active' if active_page == 'schedules' }}">
+                    <span class="nav-icon">&#9202;</span>
+                    <span>Schedules</span>
+                </a>
+            </li>
+            <li>
+                <a href="/settings" class="{{ 'active' if active_page == 'settings' }}">
+                    <span class="nav-icon">&#9881;</span>
+                    <span>Settings</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="nav-right">
+            <div class="nav-user">
+                <span class="username">{{ user.username if user else '' }}</span>
+                <a href="/logout" class="logout-btn">Sign out</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+    {% endblock %}
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
