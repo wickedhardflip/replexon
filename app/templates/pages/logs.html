@@ -15,19 +15,19 @@
         <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
             <select name="backup_type" class="form-select" onchange="this.form.requestSubmit()">
                 <option value="">All Types</option>
-                <option value="daily_mirror" {{ 'selected' if backup_type == 'daily_mirror' }}>Daily Mirror</option>
-                <option value="snapshot" {{ 'selected' if backup_type == 'snapshot' }}>Snapshot</option>
-                <option value="cleanup" {{ 'selected' if backup_type == 'cleanup' }}>Cleanup</option>
-                <option value="manual" {{ 'selected' if backup_type == 'manual' }}>Manual</option>
-                <option value="script_backup" {{ 'selected' if backup_type == 'script_backup' }}>Config Backup</option>
+                <option value="daily_mirror" {% if backup_type == 'daily_mirror' %}selected{% endif %}>Daily Mirror</option>
+                <option value="snapshot" {% if backup_type == 'snapshot' %}selected{% endif %}>Snapshot</option>
+                <option value="cleanup" {% if backup_type == 'cleanup' %}selected{% endif %}>Cleanup</option>
+                <option value="manual" {% if backup_type == 'manual' %}selected{% endif %}>Manual</option>
+                <option value="script_backup" {% if backup_type == 'script_backup' %}selected{% endif %}>Config Backup</option>
             </select>
         </div>
         <div class="form-group" style="margin-bottom: 0; min-width: 120px;">
             <select name="status" class="form-select" onchange="this.form.requestSubmit()">
                 <option value="">All Statuses</option>
-                <option value="success" {{ 'selected' if status_filter == 'success' }}>Success</option>
-                <option value="failure" {{ 'selected' if status_filter == 'failure' }}>Failure</option>
-                <option value="running" {{ 'selected' if status_filter == 'running' }}>Running</option>
+                <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+                <option value="failure" {% if status_filter == 'failure' %}selected{% endif %}>Failure</option>
+                <option value="running" {% if status_filter == 'running' %}selected{% endif %}>Running</option>
             </select>
         </div>
         <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">

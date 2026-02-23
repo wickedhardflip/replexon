@@ -146,11 +146,10 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const typeCounts = {{ type_counts_json | safe }};
-    const dailySizes = {{ daily_sizes_json | safe }};
-    const successRate = {{ stats.success_rate }};
-    const totalBackups = {{ stats.total_backups }};
-</script>
+<div id="dashboard-data" hidden
+     data-type-counts="{{ type_counts | tojson | e }}"
+     data-daily-sizes="{{ daily_sizes | tojson | e }}"
+     data-success-rate="{{ stats.success_rate }}"
+     data-total-backups="{{ stats.total_backups }}"></div>
 <script src="/static/js/dashboard.js" defer></script>
 {% endblock %}

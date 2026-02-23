@@ -6,7 +6,7 @@
     <h2>Backup Schedules</h2>
     <form method="post" action="/schedules/run-now" style="display: inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-primary" {{ 'disabled' if not can_trigger }}>
+        <button type="submit" class="btn btn-primary" {% if not can_trigger %}disabled{% endif %}>
             &#9654; Run Now
         </button>
     </form>

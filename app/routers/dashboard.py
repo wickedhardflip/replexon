@@ -1,7 +1,5 @@
 """Dashboard route: main overview with stats, charts, and recent backups."""
 
-import json
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -40,8 +38,8 @@ async def dashboard(
             "user": user,
             "active_page": "dashboard",
             "stats": stats,
-            "type_counts_json": json.dumps(type_counts),
-            "daily_sizes_json": json.dumps(daily_sizes),
+            "type_counts": type_counts,
+            "daily_sizes": daily_sizes,
             "recent_backups": recent,
             "selected_days": days,
         },

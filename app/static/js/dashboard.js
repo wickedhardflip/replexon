@@ -1,6 +1,13 @@
 /* RePlexOn - Dashboard Charts (purple/pink theme matching inspo) */
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Read server data from data attributes (avoids template vars in script tags)
+    var dataEl = document.getElementById('dashboard-data');
+    var typeCounts = dataEl ? JSON.parse(dataEl.dataset.typeCounts) : {};
+    var dailySizes = dataEl ? JSON.parse(dataEl.dataset.dailySizes) : [];
+    var successRate = dataEl ? parseFloat(dataEl.dataset.successRate) : 0;
+    var totalBackups = dataEl ? parseInt(dataEl.dataset.totalBackups, 10) : 0;
+
     var PURPLE = '#7c3aed';
     var PURPLE_LIGHT = 'rgba(124, 58, 237, 0.3)';
     var PINK = '#e879a8';
@@ -44,18 +51,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Stat card mini charts (colored rings like the inspo)
-    if (typeof successRate !== 'undefined') {
-        miniDoughnut('successChart', successRate, 100, successRate >= 95 ? SUCCESS : (successRate >= 80 ? WARNING : DANGER));
-    }
-    if (typeof totalBackups !== 'undefined') {
-        miniDoughnut('totalChart', totalBackups, Math.max(totalBackups, 30), PINK);
-    }
+    miniDoughnut('successChart', successRate, 100, successRate >= 95 ? SUCCESS : (successRate >= 80 ? WARNING : DANGER));
+    miniDoughnut('totalChart', totalBackups, Math.max(totalBackups, 30), PINK);
     miniDoughnut('lastBackupChart', 1, 1, PURPLE);
     miniDoughnut('sizeChart', 0.7, 1, PURPLE);
 
     // --- Bar chart: Backup Size Over Time (purple/pink gradient bars) ---
     var barCanvas = document.getElementById('sizeBarChart');
-    if (barCanvas && typeof dailySizes !== 'undefined' && dailySizes.length > 0) {
+    if (barCanvas && dailySizes.length > 0) {
         var labels = dailySizes.map(function(d) {
             var parts = d.date.split('-');
             return parts[1] + '/' + parts[2];
@@ -119,7 +122,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Doughnut chart: By Type ---
     var doughnutCanvas = document.getElementById('typeDoughnut');
-    if (doughnutCanvas && typeof typeCounts !== 'undefined') {
+    if (doughnutCanvas && Object.keys(typeCounts).length > 0) {
         var typeLabels = Object.keys(typeCounts).map(function(k) {
             return k.replace(/_/g, ' ');
         });
