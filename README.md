@@ -10,7 +10,9 @@
 
 # RePlexOn
 
-A self-hosted backup system and monitoring dashboard for Plex Media Server. RePlexOn backs up your Plex data to a NAS or Synology device via rsync, then gives you a clean web dashboard to monitor backup status, browse history, view transfer stats, manage schedules, and configure email alerts.
+A self-hosted backup system and monitoring dashboard for Plex Media Server. RePlexOn backs up your Plex **configuration, database, metadata, and settings** to a NAS or Synology device via rsync, then gives you a clean web dashboard to monitor backup status, browse history, view transfer stats, manage schedules, and configure email alerts.
+
+> **What gets backed up:** Plex stores its database, watch history, user accounts, posters/artwork, plugin data, preferences, and server settings in a data directory separate from your media files. This is what RePlexOn protects. **Your actual media library (movies, TV shows, music) is NOT backed up** -- those files are typically too large for this approach and should be managed separately. RePlexOn backs up everything you'd need to rebuild a Plex server without re-scanning and reconfiguring from scratch.
 
 **This project is provided as-is, free and open source under the MIT license.** It was built to solve a real problem on a real Plex server and is shared in the hope that it may be useful to others running similar setups. No warranty or support is provided -- see [Disclaimer](#disclaimer) below.
 
@@ -33,9 +35,9 @@ A self-hosted backup system and monitoring dashboard for Plex Media Server. RePl
 RePlexOn has two parts:
 
 ### 1. Backup Scripts
-Three bash scripts (in `scripts/`) handle the actual backup work via cron:
+Three bash scripts (in `scripts/`) handle the actual backup work via cron. They target the **Plex data directory** -- the folder where Plex stores its database, metadata, thumbnails, watch history, user preferences, and server configuration (typically 5-50 GB depending on library size and metadata agents). This is NOT your media library.
 
-- **Daily mirror** (3 AM) -- rsync your entire Plex data directory to a NAS using rsync daemon protocol
+- **Daily mirror** (3 AM) -- rsync the Plex data directory to a NAS using rsync daemon protocol
 - **Weekly snapshots** (Sundays) -- after the daily mirror, create a dated copy for point-in-time recovery
 - **Snapshot cleanup** (Sunday 4 AM) -- remove old weekly snapshots, keeping the most recent 4
 - **Config self-backup** (1st of month) -- back up all scripts and configs to the NAS
