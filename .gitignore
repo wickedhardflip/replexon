@@ -19,6 +19,7 @@ data/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 
 # IDE
 .idea/
@@ -36,3 +37,6 @@ Thumbs.db
 
 # Credentials
 scripts/rsync.secret
+
+# Claude Code
+.mcp.json
