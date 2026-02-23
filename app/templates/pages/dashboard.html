@@ -147,8 +147,8 @@
 
 {% block scripts %}
 <div id="dashboard-data" hidden
-     data-type-counts="{{ type_counts | tojson | e }}"
-     data-daily-sizes="{{ daily_sizes | tojson | e }}"
+     data-type-counts="{{ type_counts_json }}"
+     data-daily-sizes="{{ daily_sizes_json }}"
      data-success-rate="{{ stats.success_rate }}"
      data-total-backups="{{ stats.total_backups }}"></div>
 <script src="/static/js/dashboard.js" defer></script>
