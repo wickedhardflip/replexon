@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - RePlexOn{% endblock %}
 {% block head %}
-<script src="/static/js/chart.min.js" defer></script>
+<script src="/static/js/chart.min.js?v=2" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -203,5 +203,5 @@
      data-daily-durations="{{ daily_durations_json }}"
      data-success-rate="{{ stats.success_rate }}"
      data-total-backups="{{ stats.total_backups }}"></div>
-<script src="/static/js/dashboard.js" defer></script>
+<script src="/static/js/dashboard.js?v=2" defer></script>
 {% endblock %}

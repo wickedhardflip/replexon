@@ -767,13 +767,16 @@ tr:last-child td { border-bottom: none; }
 .calendar-day {
     width: 14px;
     height: 14px;
+    min-width: 14px;
+    min-height: 14px;
     border-radius: 2px;
     cursor: default;
+    flex-shrink: 0;
 }
 
 .calendar-day.success { background: var(--success); }
 .calendar-day.failure { background: var(--danger); }
-.calendar-day.none { background: var(--border); }
+.calendar-day.none { background: #cdd0da; }
 
 .calendar-legend {
     display: flex;
