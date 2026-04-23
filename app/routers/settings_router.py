@@ -103,6 +103,9 @@ async def settings_page(
     backup_destination = _get_setting(db, "backup_destination", settings.backup_destination)
     plex_data_path = _get_setting(db, "plex_data_path", settings.plex_data_path)
 
+    from app.services.email_service import get_recent_email_logs
+    email_logs = get_recent_email_logs(db, limit=5)
+
     return templates.TemplateResponse(
         "pages/settings.html",
         {
@@ -120,6 +123,7 @@ async def settings_page(
             "plex_data_path": plex_data_path,
             "cron_edit_enabled": settings.cron_edit_enabled,
             "csrf_token": generate_csrf_token(),
+            "email_logs": email_logs,
         },
     )
 

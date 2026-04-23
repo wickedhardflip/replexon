@@ -25,7 +25,7 @@
     </div>
 </div>
 
-{% if backup_destination or plex_data_path %}
+{% if backup_destination or plex_data_path or nas_status %}
 <div class="info-bar">
     {% if plex_data_path %}
     <div class="info-bar-item">
@@ -39,6 +39,34 @@
         <span class="info-bar-value">{{ backup_destination }}</span>
     </div>
     {% endif %}
+    {% if nas_status %}
+    <div class="info-bar-item" style="margin-left: auto;">
+        <span class="info-bar-label">NAS</span>
+        <span class="nas-status-badge nas-{{ nas_status.status }}">{{ nas_status.status | upper }}</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Live Backup Progress (HTMX polled) -->
+<div id="backup-progress"
+     hx-get="/api/backup-status"
+     hx-trigger="load, every 10s"
+     hx-swap="innerHTML">
+</div>
+
+<!-- Failure Alerts -->
+{% if failure_clusters %}
+<div class="failure-alerts">
+    {% for cluster in failure_clusters %}
+    <div class="alert alert-{{ 'error' if cluster.type == 'streak' else 'warning' }}" style="margin-bottom: 0.5rem;">
+        {% if cluster.type == 'streak' %}
+        <strong>Failure streak:</strong> {{ cluster.message }}
+        {% else %}
+        {{ cluster.message }}
+        {% endif %}
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -139,7 +167,6 @@
             <div class="calendar-days">
                 {% for day in range(1, month.days_in_month + 1) %}
                 {% set status = month.statuses.get(day) %}
-                {% set today_date = None %}
                 <div class="calendar-day {{ status if status else 'none' }}"
                      title="{{ month.label.split(' ')[0] }} {{ day }}: {{ status if status else 'no backup' }}"></div>
                 {% endfor %}
@@ -203,5 +230,5 @@
      data-daily-durations="{{ daily_durations_json }}"
      data-success-rate="{{ stats.success_rate }}"
      data-total-backups="{{ stats.total_backups }}"></div>
-<script src="/static/js/dashboard.js?v=2" defer></script>
+<script src="/static/js/dashboard.js?v=3" defer></script>
 {% endblock %}

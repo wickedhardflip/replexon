@@ -92,6 +92,43 @@
     <p class="text-xs text-muted" style="margin-top: 0.75rem;">SMTP settings are used by RePlexOn for sending notifications. If msmtp is installed, settings are auto-detected on first setup.</p>
 </div>
 
+<!-- Email Delivery Log -->
+{% if email_logs %}
+<div class="settings-section">
+    <h3>Email Delivery Log</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Sent</th>
+                    <th>Recipient</th>
+                    <th>Subject</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in email_logs %}
+                <tr>
+                    <td>{{ log.sent_at.strftime('%b %d, %I:%M %p') }}</td>
+                    <td class="font-mono text-xs">{{ log.recipient }}</td>
+                    <td>{{ log.subject }}</td>
+                    <td><span class="badge badge-daily_mirror">{{ log.method }}</span></td>
+                    <td>
+                        {% if log.success %}
+                        <span class="badge badge-success">OK</span>
+                        {% else %}
+                        <span class="badge badge-failure" title="{{ log.error_message or '' }}">FAIL</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Server Paths -->
 <div class="settings-section">
     <h3>Server Configuration</h3>

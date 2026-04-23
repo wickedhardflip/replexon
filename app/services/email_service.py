@@ -93,6 +93,19 @@ def _send_via_smtp(db: DBSession, to_addr: str, msg: MIMEMultipart) -> Tuple[boo
         return False, f"Connection error: {e}"
 
 
+def _log_email(db: DBSession, recipient: str, subject: str, success: bool, method: str, error: str = None):
+    from app.models.email_log import EmailLog
+    log = EmailLog(
+        recipient=recipient,
+        subject=subject,
+        success=success,
+        method=method,
+        error_message=error,
+    )
+    db.add(log)
+    db.commit()
+
+
 def send_test_email(db: DBSession) -> Tuple[bool, str]:
     """Send a test email. Uses msmtp if available, else direct SMTP."""
     recipient = _get_recipient(db)
@@ -102,9 +115,23 @@ def send_test_email(db: DBSession) -> Tuple[bool, str]:
     from_addr = _get_setting(db, "smtp_from") or recipient
     msg = _build_test_message(from_addr, recipient)
 
-    # Prefer msmtp if installed (has stored credentials)
     if shutil.which("msmtp"):
-        return _send_via_msmtp(recipient, msg)
+        success, message = _send_via_msmtp(recipient, msg)
+        _log_email(db, recipient, "RePlexOn - Test Notification", success, "msmtp",
+                   None if success else message)
+        return success, message
 
-    # Fall back to direct SMTP
-    return _send_via_smtp(db, recipient, msg)
+    success, message = _send_via_smtp(db, recipient, msg)
+    _log_email(db, recipient, "RePlexOn - Test Notification", success, "smtp",
+               None if success else message)
+    return success, message
+
+
+def get_recent_email_logs(db: DBSession, limit: int = 10) -> list:
+    from app.models.email_log import EmailLog
+    return (
+        db.query(EmailLog)
+        .order_by(EmailLog.sent_at.desc())
+        .limit(limit)
+        .all()
+    )

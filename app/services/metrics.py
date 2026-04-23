@@ -193,3 +193,67 @@ def get_calendar_data(db: DBSession, months: int = 4) -> list[dict]:
         })
 
     return result
+
+
+def get_failure_clusters(db: DBSession, days: int = 30) -> list[dict]:
+    """Detect failure patterns: consecutive streaks vs isolated one-offs.
+
+    Returns a list of cluster dicts:
+    [{"type": "streak", "count": 3, "start": "Apr 15", "end": "Apr 17",
+      "message": "3 consecutive failures Apr 15–17"},
+     {"type": "isolated", "date": "Apr 20",
+      "message": "Isolated failure on Apr 20"}]
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (
+        db.query(BackupRun.started_at, BackupRun.status)
+        .filter(
+            BackupRun.started_at >= cutoff,
+            BackupRun.backup_type == "daily_mirror",
+        )
+        .order_by(BackupRun.started_at)
+        .all()
+    )
+
+    if not rows:
+        return []
+
+    clusters = []
+    streak_start = None
+    streak_count = 0
+
+    for i, row in enumerate(rows):
+        if row.status == "failure":
+            if streak_count == 0:
+                streak_start = row.started_at
+            streak_count += 1
+        else:
+            if streak_count > 0:
+                _emit_cluster(clusters, streak_start, rows[i - 1].started_at, streak_count)
+            streak_count = 0
+            streak_start = None
+
+    if streak_count > 0:
+        _emit_cluster(clusters, streak_start, rows[-1].started_at, streak_count)
+
+    return clusters
+
+
+def _emit_cluster(clusters: list, start_dt, end_dt, count: int):
+    start_str = start_dt.strftime("%b %d")
+    if count == 1:
+        clusters.append({
+            "type": "isolated",
+            "count": 1,
+            "date": start_str,
+            "message": f"Isolated failure on {start_str}",
+        })
+    else:
+        end_str = end_dt.strftime("%b %d")
+        clusters.append({
+            "type": "streak",
+            "count": count,
+            "start": start_str,
+            "end": end_str,
+            "message": f"{count} consecutive failures {start_str}–{end_str}",
+        })

@@ -794,6 +794,48 @@ tr:last-child td { border-bottom: none; }
     color: var(--text-muted);
 }
 
+/* ========== NAS Status Badge ========== */
+.nas-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.nas-healthy { background: var(--success-bg); color: var(--success); }
+.nas-warning { background: var(--warning-bg); color: var(--warning); }
+.nas-stale { background: var(--warning-bg); color: var(--warning); }
+.nas-unreachable { background: var(--danger-bg); color: var(--danger); }
+.nas-unknown { background: rgba(107, 114, 128, 0.08); color: #6b7280; }
+
+/* ========== Live Backup Progress ========== */
+.backup-progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    background: var(--accent-purple-light);
+    border: 1px solid rgba(124, 58, 237, 0.15);
+    border-radius: var(--radius);
+    padding: 0.625rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.8125rem;
+    color: var(--accent-purple);
+    animation: progress-pulse 2s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* ========== Failure Alerts ========== */
+.failure-alerts {
+    margin-bottom: 1rem;
+}
+
 /* ========== Login Page ========== */
 .login-container {
     min-height: 100vh;

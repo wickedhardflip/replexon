@@ -48,6 +48,24 @@ async def _poll_logs():
             logger.exception("Error in log poll task")
 
 
+async def _poll_nas_health():
+    """Background task: check NAS reachability every 5 minutes."""
+    from app.services.nas_health import check_nas_health
+
+    while True:
+        try:
+            await asyncio.sleep(300)
+            db = SessionLocal()
+            try:
+                check_nas_health(db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Error in NAS health check")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
@@ -69,16 +87,18 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed initial log import (non-fatal)")
 
-    # Start background log poller
+    # Start background tasks
     poll_task = asyncio.create_task(_poll_logs())
+    nas_task = asyncio.create_task(_poll_nas_health())
 
     yield
 
-    poll_task.cancel()
-    try:
-        await poll_task
-    except asyncio.CancelledError:
-        pass
+    for task in (poll_task, nas_task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 def create_app() -> FastAPI:
