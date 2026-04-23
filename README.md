@@ -176,7 +176,7 @@ The `scripts/` directory contains production-ready backup scripts for rsync to a
 Each script has clearly marked configuration variables at the top. Edit these to match your setup:
 
 ```bash
-PLEX_DATA="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
+PLEX_DATA="/var/snap/plexmediaserver/common/Library/Application Support/Plex Media Server"
 NAS_IP="192.168.1.100"
 RSYNC_USER="backupuser"
 RSYNC_MODULE="plex-backups"
@@ -184,6 +184,18 @@ RSYNC_PASSWORD_FILE="/etc/replexon/rsync.secret"
 ```
 
 **Credential handling**: rsync passwords are read from a file (`--password-file`), never embedded in scripts. The credential file is stored at `/etc/replexon/rsync.secret` with mode 600.
+
+### Database Safety
+
+The backup script uses SQLite's `.backup` API to create consistent snapshots of Plex's databases before rsyncing. This prevents corrupt or incomplete database backups while Plex is running.
+
+**How it works:**
+1. Before the main rsync, `sqlite3 .backup` creates safe copies of each `.db` file
+2. The main rsync excludes live database files (`.db`, `.db-wal`, `.db-shm`)
+3. A second rsync pushes the consistent snapshots to the NAS
+4. The staging directory is cleaned up automatically (even on failure)
+
+**Prerequisite:** `sqlite3` must be installed on the server (`sudo apt install sqlite3`). If sqlite3 is not available, the script falls back to rsyncing live database files (the previous behavior).
 
 See [`scripts/README.md`](scripts/README.md) for detailed setup instructions including NAS rsync daemon configuration, SSH key setup for the cleanup script, and crontab entries.
 
@@ -352,7 +364,7 @@ No npm. No Node.js. No build step. No external CDN dependencies.
 RePlexOn was built for a specific setup (Ubuntu server + Synology NAS via rsync daemon protocol) but can be adapted:
 
 - **Different NAS**: The backup scripts use standard rsync -- any rsync-compatible target works. Edit the variables at the top of each script.
-- **Different Plex install**: Change `PLEX_DATA` in `backup-plex.sh` to match your Plex data location.
+- **Different Plex install**: Change `PLEX_DATA` in `backup-plex.sh` to match your Plex data location. The default is the snap install path (`/var/snap/plexmediaserver/common/...`). For apt/deb installs, use `/var/lib/plexmediaserver/...`.
 - **Different backup method**: If you don't use rsync daemon protocol, modify the rsync commands. For SSH-based rsync, replace `rsync://user@host::module` with `user@host:/path/` syntax.
 - **Log format**: If you write your own backup script, match the log marker format exactly (see [How It Works](#how-it-works)) or the dashboard won't parse your logs.
 - **Port**: Change `APP_PORT` in `.env` (default 9847).

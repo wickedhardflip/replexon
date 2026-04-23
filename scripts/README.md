@@ -25,7 +25,7 @@ sudo chmod 600 /etc/replexon/rsync.secret
 
 Open each script and configure the variables at the top:
 
-- **`PLEX_DATA`** -- Path to your Plex data directory
+- **`PLEX_DATA`** -- Path to your Plex data directory (default: snap install path)
 - **`NAS_IP`** -- Your NAS/Synology IP address
 - **`RSYNC_USER`** / **`RSYNC_MODULE`** -- rsync daemon credentials on your NAS
 - **`RSYNC_PASSWORD_FILE`** -- Path to the credential file (default: `/etc/replexon/rsync.secret`)
@@ -72,6 +72,40 @@ Add:
 0 3 * * *   /usr/local/bin/backup-plex.sh >> /var/log/plex-backup.log 2>&1
 0 4 * * 0   /usr/local/bin/cleanup-plex-snapshots.sh >> /var/log/plex-backup.log 2>&1
 0 5 1 * *   /usr/local/bin/backup-scripts.sh >> /var/log/plex-backup.log 2>&1
+```
+
+## Database Safety
+
+The backup script creates consistent SQLite snapshots before rsyncing, preventing database corruption from backing up live files.
+
+### How It Works
+
+Plex stores its library data in SQLite databases (`Plug-in Support/Databases/*.db`). These databases have active WAL (Write-Ahead Log) files that can be hundreds of megabytes. Rsyncing them while Plex is writing can produce an inconsistent backup.
+
+The script handles this automatically:
+
+1. **Safe snapshot** -- Uses `sqlite3 <db> ".backup <safe-copy>"` to create a consistent copy of each database
+2. **Exclude live files** -- The main rsync skips live `.db`, `.db-shm`, and `.db-wal` files
+3. **Push safe copies** -- A second rsync sends the consistent snapshots to the correct path on the NAS
+4. **Automatic cleanup** -- The staging directory (`/tmp/plex-db-safe/`) is removed via a shell trap, even if the script fails
+
+### Prerequisites
+
+```bash
+sudo apt install sqlite3
+```
+
+### Fallback Behavior
+
+If `sqlite3` is not installed or the `.backup` command fails, the script logs a warning and falls back to rsyncing live database files -- identical to the behavior before this feature was added. A degraded backup is always better than no backup.
+
+### Verifying Database Integrity
+
+After a backup, you can verify the backed-up databases are consistent:
+
+```bash
+sqlite3 /path/to/backed-up/com.plexapp.plugins.library.db "PRAGMA integrity_check"
+# Expected output: ok
 ```
 
 ## NAS/Synology rsync Daemon Setup
