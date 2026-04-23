@@ -1,5 +1,7 @@
 """Log viewer routes: filterable backup history."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -20,6 +22,8 @@ async def logs_page(
     backup_type: str = Query(default=""),
     status: str = Query(default=""),
     search: str = Query(default=""),
+    date_from: str = Query(default=""),
+    date_to: str = Query(default=""),
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
@@ -33,6 +37,18 @@ async def logs_page(
         query = query.filter(BackupRun.status == status)
     if search:
         query = query.filter(BackupRun.raw_log.contains(search))
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(BackupRun.started_at >= dt_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.filter(BackupRun.started_at <= dt_to)
+        except ValueError:
+            pass
 
     total = query.count()
     backups = (
@@ -54,6 +70,8 @@ async def logs_page(
         "backup_type": backup_type,
         "status_filter": status,
         "search": search,
+        "date_from": date_from,
+        "date_to": date_to,
     }
 
     # HTMX partial: only return the table + pagination

@@ -4,18 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}RePlexOn{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=3">
+    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <script>
+        (function() {
+            var t = localStorage.getItem('theme');
+            if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        })();
+    </script>
     <script src="/static/js/htmx.min.js" defer></script>
     {% block head %}{% endblock %}
 </head>
 <body>
     {% block body %}
     <nav class="top-nav">
+        <button class="nav-hamburger" id="nav-hamburger" aria-label="Menu">&#9776;</button>
         <a href="/dashboard" class="nav-brand">
             <h1>RePlexOn</h1>
         </a>
 
-        <ul class="nav-links">
+        <ul class="nav-links" id="nav-links">
             <li>
                 <a href="/dashboard" class="{{ 'active' if active_page == 'dashboard' }}">
                     <span class="nav-icon">&#9632;</span>
@@ -43,6 +50,7 @@
         </ul>
 
         <div class="nav-right">
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
             <div class="nav-user">
                 <span class="username">{{ user.username if user else '' }}</span>
                 <a href="/logout" class="logout-btn">Sign out</a>
@@ -55,7 +63,7 @@
     </main>
     {% endblock %}
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=4"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
