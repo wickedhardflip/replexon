@@ -24,15 +24,15 @@ A self-hosted backup system and monitoring dashboard for Plex Media Server. RePl
 
 | Dashboard | Backup Logs |
 |:-:|:-:|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Logs](docs/screenshots/logs.png) |
+| ![Dashboard](docs/screenshots/dashboard.png?v=2) | ![Logs](docs/screenshots/logs.png?v=2) |
 
 | Schedules | Settings |
 |:-:|:-:|
-| ![Schedules](docs/screenshots/schedules.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Schedules](docs/screenshots/schedules.png?v=2) | ![Settings](docs/screenshots/settings.png?v=2) |
 
 | Login |
 |:-:|
-| ![Login](docs/screenshots/login.png) |
+| ![Login](docs/screenshots/login.png?v=2) |
 
 ---
 
