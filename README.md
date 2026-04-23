@@ -26,9 +26,13 @@ A self-hosted backup system and monitoring dashboard for Plex Media Server. RePl
 |:-:|:-:|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Logs](docs/screenshots/logs.png) |
 
-| Settings | Login |
+| Schedules | Settings |
 |:-:|:-:|
-| ![Settings](docs/screenshots/settings.png) | ![Login](docs/screenshots/login.png) |
+| ![Schedules](docs/screenshots/schedules.png) | ![Settings](docs/screenshots/settings.png) |
+
+| Login |
+|:-:|
+| ![Login](docs/screenshots/login.png) |
 
 ---
 
@@ -48,14 +52,21 @@ Three bash scripts (in `scripts/`) handle the actual backup work via cron. They 
 A FastAPI web application that reads the backup log files and presents:
 
 - **At-a-glance status** -- last backup result, total size, success rate, backup count
+- **DB safety indicator** -- shows whether the latest backup used SQLite `.backup` (safe) or fell back to live rsync
 - **Source and destination paths** -- see exactly where data is coming from and going to
-- **Size charts** -- track backup size over time with daily bar charts
-- **Backup type breakdown** -- doughnut chart showing daily mirrors vs snapshots vs cleanups
-- **Full history** -- filterable, searchable log table with expandable detail rows
+- **NAS health badge** -- background ping every 5 minutes with healthy/warning/stale/unreachable status
+- **Size and duration charts** -- track backup size and duration over time with daily bar charts
+- **Backup calendar heatmap** -- GitHub-contributions-style grid showing daily backup history (green/red/gray)
+- **Next backup countdown** -- parses your cron schedule and shows a live countdown to the next backup
+- **Failure clustering** -- detects consecutive failure streaks vs isolated one-offs with alert banners
+- **Live backup progress** -- real-time progress indicator with elapsed time when a backup is running
+- **Full history** -- filterable, searchable log table with date range picker and expandable detail rows
 - **Schedule viewer** -- reads your crontab and displays schedules in human-readable format
 - **Manual trigger** -- run a backup on demand with rate limiting
-- **Email notifications** -- SMTP configuration with test email (auto-detects msmtp if installed)
+- **Email notifications** -- SMTP configuration with test email and delivery log (auto-detects msmtp if installed)
 - **Settings UI** -- configure backup paths, email, SMTP, and change password from the browser
+- **Dark mode** -- dark theme by default with light mode toggle, persisted via localStorage
+- **Mobile responsive** -- hamburger navigation menu for screens under 768px
 
 ### How It Works
 
@@ -325,9 +336,9 @@ replexon/
     main.py              # FastAPI app + background log poller
     config.py            # Pydantic Settings (.env loading)
     database.py          # SQLAlchemy engine (SQLite WAL)
-    models/              # User, Session, BackupRun, AppSetting
+    models/              # User, Session, BackupRun, AppSetting, EmailLog
     routers/             # Auth, Dashboard, Logs, Schedules, Settings
-    services/            # Log parser, metrics, cron, backup runner, email
+    services/            # Log parser, metrics, cron, backup runner, email, NAS health
     templates/           # Jinja2 (base + pages + components)
     static/              # CSS, JS (HTMX + Chart.js vendored), images
   scripts/
