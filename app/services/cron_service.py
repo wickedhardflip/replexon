@@ -2,7 +2,8 @@
 
 import subprocess
 from dataclasses import dataclass
-from typing import List
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 from app.config import settings
 
@@ -109,6 +110,59 @@ def get_backup_cron_entries() -> List[CronEntry]:
             ))
 
     return entries
+
+
+def get_next_backup_time(entries: Optional[List[CronEntry]] = None) -> Optional[str]:
+    """Calculate the next fire time for the daily backup cron entry.
+
+    Returns ISO format string or None if no backup schedule found.
+    Handles daily (0 3 * * *), weekly (0 4 * * 0), and monthly (0 5 1 * *).
+    """
+    if entries is None:
+        entries = get_backup_cron_entries()
+
+    if not entries:
+        return None
+
+    now = datetime.now()
+    soonest = None
+
+    for entry in entries:
+        if entry.hour == "*" or entry.minute == "*":
+            continue
+
+        hour = int(entry.hour)
+        minute = int(entry.minute)
+
+        if entry.dom != "*":
+            dom = int(entry.dom)
+            candidate = now.replace(day=dom, hour=hour, minute=minute, second=0, microsecond=0)
+            if candidate <= now:
+                month = now.month + 1
+                year = now.year
+                if month > 12:
+                    month = 1
+                    year += 1
+                candidate = candidate.replace(year=year, month=month)
+        elif entry.dow != "*":
+            target_dow = int(entry.dow) % 7
+            current_dow = now.weekday()
+            py_target = (target_dow - 1) % 7
+            days_ahead = (py_target - current_dow) % 7
+            candidate = (now + timedelta(days=days_ahead)).replace(
+                hour=hour, minute=minute, second=0, microsecond=0
+            )
+            if candidate <= now:
+                candidate += timedelta(days=7)
+        else:
+            candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if candidate <= now:
+                candidate += timedelta(days=1)
+
+        if soonest is None or candidate < soonest:
+            soonest = candidate
+
+    return soonest.isoformat() if soonest else None
 
 
 def update_cron_entry(old_line: str, new_line: str) -> bool:

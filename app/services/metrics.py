@@ -1,5 +1,6 @@
 """Compute dashboard statistics from backup_runs."""
 
+import calendar
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -114,3 +115,81 @@ def get_recent_backups(db: DBSession, limit: int = 10) -> list[BackupRun]:
         .limit(limit)
         .all()
     )
+
+
+def get_daily_durations(db: DBSession, days: int = 30) -> list[dict]:
+    """Get daily backup durations for trend chart."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = (
+        db.query(
+            func.date(BackupRun.started_at).label("day"),
+            func.max(BackupRun.duration_seconds).label("duration"),
+        )
+        .filter(
+            BackupRun.started_at >= cutoff,
+            BackupRun.status == "success",
+            BackupRun.backup_type == "daily_mirror",
+            BackupRun.duration_seconds.isnot(None),
+        )
+        .group_by(func.date(BackupRun.started_at))
+        .order_by(func.date(BackupRun.started_at))
+        .all()
+    )
+    return [{"date": str(row.day), "minutes": round(row.duration / 60, 1)} for row in rows]
+
+
+def get_calendar_data(db: DBSession, months: int = 4) -> list[dict]:
+    """Get month-by-month backup status for heatmap calendar.
+
+    Returns a list of month dicts, newest first:
+    [{"year": 2026, "month": 4, "label": "Apr 2026", "days_in_month": 30,
+      "statuses": {"1": "success", "5": "failure", ...}}]
+    Days not in statuses = no backup attempt.
+    """
+    today = datetime.now(timezone.utc).date()
+    result = []
+
+    for i in range(months):
+        # Walk backwards by month
+        year = today.year
+        month = today.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+
+        days_in = calendar.monthrange(year, month)[1]
+        month_start = datetime(year, month, 1, tzinfo=timezone.utc)
+        month_end = datetime(year, month, days_in, 23, 59, 59, tzinfo=timezone.utc)
+
+        rows = (
+            db.query(
+                func.date(BackupRun.started_at).label("day"),
+                BackupRun.status,
+            )
+            .filter(
+                BackupRun.started_at >= month_start,
+                BackupRun.started_at <= month_end,
+                BackupRun.backup_type == "daily_mirror",
+            )
+            .all()
+        )
+
+        statuses = {}
+        for row in rows:
+            day_str = str(row.day)
+            day_num = int(day_str.split("-")[2])
+            existing = statuses.get(day_num)
+            if existing == "failure":
+                continue
+            statuses[day_num] = row.status
+
+        month_name = calendar.month_abbr[month]
+        result.append({
+            "year": year,
+            "month": month,
+            "label": f"{month_name} {year}",
+            "days_in_month": days_in,
+            "statuses": statuses,
+        })
+
+    return result

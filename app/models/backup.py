@@ -31,6 +31,7 @@ class BackupRun(Base):
         String(10), default="cron", nullable=False
     )  # cron | manual
     email_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    db_safe: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     def __repr__(self) -> str:
         return f"<BackupRun {self.backup_type} {self.status} {self.started_at}>"

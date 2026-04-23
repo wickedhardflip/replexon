@@ -29,6 +29,7 @@ CLEANUP_START_RE = re.compile(r"=== Plex Snapshot Cleanup - (.+?) ====")
 SNAPSHOT_RE = re.compile(r"Sunday detected - creating weekly snapshot")
 SENT_BYTES_RE = re.compile(r"sent ([\d,]+) bytes\s+received ([\d,]+) bytes")
 TOTAL_SIZE_RE = re.compile(r"total size is ([\d,]+)\s+speedup is")
+DB_SAFE_RE = re.compile(r"--- Safe database snapshot: complete")
 
 # Date format from the bash `date` command output
 # e.g. "Mon Feb 23 03:13:23 AM EST 2026"
@@ -170,8 +171,8 @@ def extract_stats_file(log_path: str) -> Optional[str]:
     try:
         result = subprocess.run(
             ["bash", "-c",
-             f"grep -F -e '=== Plex Backup' -e 'total size is' -e 'sent ' '{log_path}' "
-             f"| grep -E '=== Plex Backup (Started|Completed|FAILED)|sent .* bytes.*received|total size is .* speedup' "
+             f"grep -F -e '=== Plex Backup' -e 'total size is' -e 'sent ' -e 'Safe database snapshot: complete' '{log_path}' "
+             f"| grep -E '=== Plex Backup (Started|Completed|FAILED)|sent .* bytes.*received|total size is .* speedup|Safe database snapshot: complete' "
              f"> '{extract_path}'"],
             capture_output=True, text=True, timeout=300,
         )
@@ -208,6 +209,10 @@ def enrich_from_stats(db: DBSession, stats_path: str) -> int:
             continue
 
         if not current:
+            continue
+
+        if DB_SAFE_RE.search(line):
+            current["db_safe"] = True
             continue
 
         m = SENT_BYTES_RE.search(line)
@@ -267,6 +272,9 @@ def enrich_from_stats(db: DBSession, stats_path: str) -> int:
         if start and end and not run.duration_seconds:
             run.duration_seconds = (end - start).total_seconds()
             run.finished_at = end
+            changed = True
+        if run.db_safe is None:
+            run.db_safe = entry.get("db_safe", False)
             changed = True
         if changed:
             updated += 1

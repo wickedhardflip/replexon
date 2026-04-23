@@ -8,7 +8,11 @@
 <div class="page-header">
     <h2>Dashboard</h2>
     <div class="flex items-center gap-1">
-        <div class="next-backup">
+        <div class="next-backup" id="next-backup-indicator">
+            {% if next_backup_iso %}
+            <span class="next-backup-countdown" id="countdown" data-target="{{ next_backup_iso }}"></span>
+            <span class="next-backup-sep">|</span>
+            {% endif %}
             <span class="pulse"></span>
             <span>System active</span>
         </div>
@@ -54,6 +58,11 @@
                 {% endif %}
             </div>
             <div class="stat-sub">{{ stats.last_backup.started_at.strftime('%b %d, %I:%M %p') }}</div>
+            {% if stats.last_backup.db_safe is not none %}
+            <div class="db-safety-badge {{ 'db-safe' if stats.last_backup.db_safe else 'db-live' }}">
+                {{ 'DB Safe' if stats.last_backup.db_safe else 'DB Live' }}
+            </div>
+            {% endif %}
             {% else %}
             <div class="stat-value text-muted">--</div>
             <div class="stat-sub">No backups yet</div>
@@ -104,7 +113,7 @@
     </div>
 </div>
 
-<!-- Charts Row -->
+<!-- Charts Row: Size + Duration -->
 <div class="charts-row">
     <div class="chart-card">
         <h3>Backup Size Over Time</h3>
@@ -113,10 +122,35 @@
         </div>
     </div>
     <div class="chart-card">
-        <h3>By Type</h3>
-        <div class="chart-container doughnut-chart">
-            <canvas id="typeDoughnut"></canvas>
+        <h3>Duration Trend</h3>
+        <div class="chart-container bar-chart">
+            <canvas id="durationChart"></canvas>
         </div>
+    </div>
+</div>
+
+<!-- Backup Calendar Heatmap -->
+<div class="card">
+    <h3 style="margin-bottom: 1rem;">Backup History</h3>
+    <div class="calendar-heatmap">
+        {% for month in calendar_data %}
+        <div class="calendar-month">
+            <div class="calendar-label">{{ month.label }}</div>
+            <div class="calendar-days">
+                {% for day in range(1, month.days_in_month + 1) %}
+                {% set status = month.statuses.get(day) %}
+                {% set today_date = None %}
+                <div class="calendar-day {{ status if status else 'none' }}"
+                     title="{{ month.label.split(' ')[0] }} {{ day }}: {{ status if status else 'no backup' }}"></div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="calendar-legend">
+        <span class="calendar-legend-item"><span class="calendar-day success" style="display:inline-block;"></span> Success</span>
+        <span class="calendar-legend-item"><span class="calendar-day failure" style="display:inline-block;"></span> Failure</span>
+        <span class="calendar-legend-item"><span class="calendar-day none" style="display:inline-block;"></span> No backup</span>
     </div>
 </div>
 
@@ -166,6 +200,7 @@
 <div id="dashboard-data" hidden
      data-type-counts="{{ type_counts_json }}"
      data-daily-sizes="{{ daily_sizes_json }}"
+     data-daily-durations="{{ daily_durations_json }}"
      data-success-rate="{{ stats.success_rate }}"
      data-total-backups="{{ stats.total_backups }}"></div>
 <script src="/static/js/dashboard.js" defer></script>

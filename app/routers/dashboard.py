@@ -11,8 +11,11 @@ from app.config import settings
 from app.dependencies import get_current_user, get_db
 from app.models.setting import AppSetting
 from app.models.user import User
+from app.services.cron_service import get_next_backup_time
 from app.services.metrics import (
     get_backup_type_counts,
+    get_calendar_data,
+    get_daily_durations,
     get_daily_sizes,
     get_dashboard_stats,
     get_recent_backups,
@@ -33,7 +36,10 @@ async def dashboard(
     stats = get_dashboard_stats(db, days=days)
     type_counts = get_backup_type_counts(db, days=days)
     daily_sizes = get_daily_sizes(db, days=days)
+    daily_durations = get_daily_durations(db, days=days)
+    calendar_data = get_calendar_data(db, months=4)
     recent = get_recent_backups(db, limit=10)
+    next_backup = get_next_backup_time()
 
     # Read backup paths from DB, falling back to config
     dest_row = db.query(AppSetting).filter(AppSetting.key == "backup_destination").first()
@@ -50,9 +56,12 @@ async def dashboard(
             "stats": stats,
             "type_counts_json": json.dumps(type_counts),
             "daily_sizes_json": json.dumps(daily_sizes),
+            "daily_durations_json": json.dumps(daily_durations),
+            "calendar_data": calendar_data,
             "recent_backups": recent,
             "selected_days": days,
             "backup_destination": backup_destination,
             "plex_data_path": plex_data_path,
+            "next_backup_iso": next_backup,
         },
     )
