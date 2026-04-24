@@ -42,7 +42,7 @@ def check_nas_health(db: DBSession) -> dict:
     """
     backup_dest = _get_setting(db, "backup_destination")
 
-    # Extract host from rsync-style paths like rsync://backup@192.168.4.4/LinuxBackups
+    # Extract host from rsync-style paths like rsync://user@host/module
     # or plain paths like /mnt/nas/backups (local = always reachable)
     host = None
     if backup_dest:

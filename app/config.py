@@ -42,3 +42,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if settings.secret_key == "change-me-to-a-random-string":
+    import sys
+    print(
+        "\n[SECURITY ERROR] SECRET_KEY is not set. The application cannot start with the default key.\n"
+        "Generate one with:  python3 -c \"import secrets; print(secrets.token_hex(32))\"\n"
+        "Then add it to your .env file:  SECRET_KEY=<generated_value>\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)

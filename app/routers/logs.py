@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.dependencies import get_current_user, get_db
 from app.models.backup import BackupRun
 from app.models.user import User
+from app.utils.security import generate_csrf_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -62,6 +63,7 @@ async def logs_page(
     ctx = {
         "request": request,
         "user": user,
+        "csrf_token": generate_csrf_token(),
         "active_page": "logs",
         "backups": backups,
         "page": page,
@@ -102,6 +104,7 @@ async def backup_detail(
         {
             "request": request,
             "user": user,
+            "csrf_token": generate_csrf_token(),
             "active_page": "logs",
             "backup": backup,
         },

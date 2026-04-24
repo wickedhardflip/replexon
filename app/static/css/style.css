@@ -197,6 +197,10 @@ a:hover { color: var(--accent-purple-hover); }
 .nav-user .username { font-weight: 500; color: var(--nav-text); }
 
 .nav-user .logout-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font: inherit;
     padding: 0.375rem 0.625rem;
     border-radius: var(--radius-sm);
     color: var(--nav-muted);

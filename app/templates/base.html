@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}RePlexOn{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="stylesheet" href="/static/css/style.css?v=5">
     <script>
         (function() {
             var t = localStorage.getItem('theme');
@@ -53,7 +53,10 @@
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
             <div class="nav-user">
                 <span class="username">{{ user.username if user else '' }}</span>
-                <a href="/logout" class="logout-btn">Sign out</a>
+                <form method="post" action="/logout" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="logout-btn">Sign out</button>
+                </form>
             </div>
         </div>
     </nav>
@@ -63,7 +66,7 @@
     </main>
     {% endblock %}
 
-    <script src="/static/js/app.js?v=4"></script>
+    <script src="/static/js/app.js?v=5"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

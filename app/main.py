@@ -112,6 +112,15 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
     from app.routers import auth, dashboard, logs, schedules, settings_router
 
     app.include_router(auth.router)

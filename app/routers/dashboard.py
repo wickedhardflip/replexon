@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.config import settings
 from app.dependencies import get_current_user, get_db
 from app.models.setting import AppSetting
+from app.utils.security import generate_csrf_token
 from app.models.user import User
 from app.services.backup_runner import can_trigger_backup
 from app.services.cron_service import get_next_backup_time
@@ -59,6 +60,7 @@ async def dashboard(
         {
             "request": request,
             "user": user,
+            "csrf_token": generate_csrf_token(),
             "active_page": "dashboard",
             "stats": stats,
             "type_counts_json": json.dumps(type_counts),
