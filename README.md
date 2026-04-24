@@ -47,6 +47,7 @@ Three bash scripts (in `scripts/`) handle the actual backup work via cron. They 
 - **Weekly snapshots** (Sundays) -- after the daily mirror, create a dated copy for point-in-time recovery
 - **Snapshot cleanup** (Sunday 4 AM) -- remove old weekly snapshots, keeping the most recent 4
 - **Config self-backup** (1st of month) -- back up all scripts and configs to the NAS
+- **Email summary** -- concise daily email with duration, transfer size, total size, DB safety, and success rate (requires `mail`/`mailx`)
 
 ### 2. Web Dashboard
 A FastAPI web application that reads the backup log files and presents:
@@ -296,8 +297,11 @@ python replexon.py --static             # Health check on backup files
 ### Application Security
 
 - **Authentication**: Argon2id password hashing (memory-hard, resistant to GPU/ASIC attacks)
+- **Login rate limiting**: 5 attempts per minute per IP, returns 429 on excess
 - **Sessions**: Cryptographically random 64-character hex tokens, server-side storage, 30-day expiry
-- **CSRF Protection**: HMAC-signed tokens on all POST forms
+- **CSRF Protection**: HMAC-signed tokens on all POST forms (including logout)
+- **Security headers**: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`
+- **Startup secret check**: Application refuses to start with the default `SECRET_KEY`
 - **No JavaScript frameworks**: HTMX and Chart.js are vendored -- no CDN dependencies, no supply chain risk
 - **No external API calls**: The app never phones home or contacts external services
 - **SQLite WAL mode**: Concurrent reads without blocking, crash-safe writes
