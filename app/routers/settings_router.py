@@ -227,7 +227,7 @@ async def restore_page(
         {
             "request": request,
             "user": user,
-            "active_page": "settings",
+            "active_page": "restore",
             "rsync_dest": rsync_dest,
             "plex_data_path": plex_data_path,
             "rsync_password_file": settings.rsync_password_file,
