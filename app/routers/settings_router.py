@@ -12,7 +12,7 @@ from app.config import settings
 from app.dependencies import get_current_user, get_db
 from app.models.setting import AppSetting
 from app.models.user import User
-from app.services.auth_service import hash_password, verify_password
+
 from app.utils.security import generate_csrf_token, validate_csrf_token
 
 router = APIRouter()
@@ -208,29 +208,3 @@ async def test_email(
     return RedirectResponse(url="/settings?error=" + message.replace(" ", "+"), status_code=303)
 
 
-@router.post("/settings/password")
-async def change_password(
-    request: Request,
-    current_password: str = Form(...),
-    new_password: str = Form(...),
-    confirm_password: str = Form(...),
-    csrf_token: str = Form(...),
-    user: User = Depends(get_current_user),
-    db: DBSession = Depends(get_db),
-):
-    """Change the current user's password."""
-    if not validate_csrf_token(csrf_token):
-        return RedirectResponse(url="/settings", status_code=303)
-
-    if new_password != confirm_password:
-        return RedirectResponse(url="/settings?error=Passwords+do+not+match", status_code=303)
-
-    if len(new_password) < 8:
-        return RedirectResponse(url="/settings?error=Password+must+be+at+least+8+characters", status_code=303)
-
-    if not verify_password(current_password, user.password_hash):
-        return RedirectResponse(url="/settings?error=Current+password+is+incorrect", status_code=303)
-
-    user.password_hash = hash_password(new_password)
-    db.commit()
-    return RedirectResponse(url="/settings?success=Password+changed", status_code=303)

@@ -65,7 +65,9 @@ A FastAPI web application that reads the backup log files and presents:
 - **Schedule viewer** -- reads your crontab and displays schedules in human-readable format
 - **Manual trigger** -- run a backup on demand with rate limiting
 - **Email notifications** -- SMTP configuration with test email and delivery log (auto-detects msmtp if installed)
-- **Settings UI** -- configure backup paths, email, SMTP, and change password from the browser
+- **NAS snapshot dashboard** -- view weekly snapshots stored on NAS with age and retention policy
+- **Log rotation** -- logrotate config included for weekly rotation with compression (keeps 4 weeks)
+- **Settings UI** -- configure backup paths, email, and SMTP from the browser
 - **Dark mode** -- dark theme by default with light mode toggle, persisted via localStorage
 - **Mobile responsive** -- hamburger navigation menu for screens under 768px
 
@@ -165,7 +167,7 @@ nano .env  # Set SECRET_KEY and backup paths
 
 # Initialize
 python replexon.py init-db
-python replexon.py create-user --username admin --admin
+python replexon.py create-user --username admin
 
 # Run
 uvicorn app.main:app --host 0.0.0.0 --port 9847
@@ -211,6 +213,8 @@ The backup script uses SQLite's `.backup` API to create consistent snapshots of 
 
 See [`scripts/README.md`](scripts/README.md) for detailed setup instructions including NAS rsync daemon configuration, SSH key setup for the cleanup script, and crontab entries.
 
+For restore procedures, see [`docs/restore.md`](docs/restore.md).
+
 ---
 
 ## Configuration
@@ -230,6 +234,9 @@ See [`scripts/README.md`](scripts/README.md) for detailed setup instructions inc
 | `CRON_USER` | `root` | User whose crontab to read for schedule display |
 | `LOG_POLL_INTERVAL` | `60` | Seconds between log file checks |
 | `BACKUP_COOLDOWN` | `300` | Minimum seconds between manual backup triggers |
+| `RSYNC_PASSWORD_FILE` | `/etc/replexon/rsync.secret` | Path to rsync password file (for snapshot listing) |
+| `SNAPSHOT_DIR` | `plex-snapshots` | Directory name for weekly snapshots on NAS |
+| `SNAPSHOT_KEEP_COUNT` | `4` | Number of weekly snapshots to retain |
 
 ---
 
@@ -281,7 +288,7 @@ RePlexOn includes a TV-themed CLI:
 
 ```bash
 python replexon.py init-db              # Initialize database tables
-python replexon.py create-user          # Create a user account (--admin for admin)
+python replexon.py create-user          # Create a user account
 python replexon.py import-logs          # Import backup history from log files
 python replexon.py reset-password       # Reset a user's password
 
@@ -351,7 +358,10 @@ replexon/
     backup-scripts.sh    # Monthly config self-backup
     rsync.secret.example # Credential file template
     README.md            # Detailed script setup guide
+  config/
+    logrotate.d/         # Logrotate config for backup logs
   docs/
+    restore.md           # How to restore from backup
     screenshots/         # Dashboard screenshots
   systemd/               # systemd unit file
   install.sh             # Automated installer (default + interactive)

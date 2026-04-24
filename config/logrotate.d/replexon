@@ -1,0 +1,12 @@
+/var/log/plex-backup.log
+/var/log/plex-backup-tracking.log
+{
+    su root syslog
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

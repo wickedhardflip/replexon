@@ -66,6 +66,24 @@ async def _poll_nas_health():
             logger.exception("Error in NAS health check")
 
 
+async def _poll_snapshots():
+    """Background task: enumerate NAS snapshots every hour."""
+    from app.services.snapshot_service import fetch_snapshots
+
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            db = SessionLocal()
+            try:
+                fetch_snapshots(db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Error in snapshot poll task")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
@@ -90,10 +108,11 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     poll_task = asyncio.create_task(_poll_logs())
     nas_task = asyncio.create_task(_poll_nas_health())
+    snap_task = asyncio.create_task(_poll_snapshots())
 
     yield
 
-    for task in (poll_task, nas_task):
+    for task in (poll_task, nas_task, snap_task):
         task.cancel()
         try:
             await task

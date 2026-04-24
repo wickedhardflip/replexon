@@ -256,6 +256,11 @@ install_backup_scripts() {
         fi
     fi
 
+    # Install logrotate config
+    cp "$INSTALL_DIR/config/logrotate.d/replexon" /etc/logrotate.d/replexon
+    chmod 644 /etc/logrotate.d/replexon
+    log "Logrotate config installed"
+
     log "Backup scripts installed to /usr/local/bin/"
 }
 
@@ -319,7 +324,7 @@ initialize_app() {
         if [[ "$create_admin" =~ ^[Yy] ]]; then
             read -rp "Admin username [admin]: " admin_user
             admin_user=${admin_user:-admin}
-            sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/python" replexon.py create-user --username "$admin_user" --admin
+            sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/python" replexon.py create-user --username "$admin_user"
         fi
     fi
 }
@@ -343,7 +348,7 @@ print_summary() {
         echo "  ────────────────────────"
         echo "  1. Edit rsync password:   sudo nano $CONFIG_DIR/rsync.secret"
         echo "  2. Edit backup scripts:   sudo nano /usr/local/bin/backup-plex.sh"
-        echo "  3. Create admin user:     cd $INSTALL_DIR && sudo -u $SERVICE_USER venv/bin/python replexon.py create-user --username admin --admin"
+        echo "  3. Create user:           cd $INSTALL_DIR && sudo -u $SERVICE_USER venv/bin/python replexon.py create-user --username admin"
         echo "  4. Set up crontab:        sudo crontab -e"
         echo ""
     fi

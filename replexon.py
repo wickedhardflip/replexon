@@ -139,10 +139,8 @@ def init_db():
 
 @cli.command()
 @click.option("--username", prompt=True, help="Username for the new user")
-@click.option("--email", prompt=True, help="Email address")
 @click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True, help="Password")
-@click.option("--admin", is_flag=True, default=False, help="Grant admin privileges")
-def create_user(username, email, password, admin):
+def create_user(username, password):
     """Create a new user account."""
     from app.database import SessionLocal
     from app.models.user import User
@@ -150,22 +148,18 @@ def create_user(username, email, password, admin):
 
     db = SessionLocal()
     try:
-        existing = db.query(User).filter(
-            (User.username == username) | (User.email == email)
-        ).first()
+        existing = db.query(User).filter(User.username == username).first()
         if existing:
-            click.echo(f"Error: User '{username}' or email '{email}' already exists.")
+            click.echo(f"Error: User '{username}' already exists.")
             sys.exit(1)
 
         user = User(
             username=username,
-            email=email,
             password_hash=hash_password(password),
-            is_admin=admin,
         )
         db.add(user)
         db.commit()
-        click.echo(f"[OK] User '{username}' created{' (admin)' if admin else ''}.")
+        click.echo(f"[OK] User '{username}' created.")
     finally:
         db.close()
 

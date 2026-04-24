@@ -53,4 +53,52 @@
     <br>You can edit schedules directly via SSH: <code class="font-mono">sudo crontab -e -u root</code>
 </div>
 {% endif %}
+
+<!-- Weekly Snapshots -->
+<div class="card" style="margin-top: 2rem;">
+    <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
+        <h3 style="margin-bottom: 0;">Weekly Snapshots on NAS</h3>
+        {% if snapshot_data.last_check %}
+        <span class="text-xs text-muted">Last checked: {{ snapshot_data.last_check[:16] | replace('T', ' ') }}</span>
+        {% endif %}
+    </div>
+
+    {% if snapshot_data.snapshots %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Age</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for snap in snapshot_data.snapshots %}
+                <tr>
+                    <td>{{ snap.date }}</td>
+                    <td>
+                        {% if snap.age_days == 0 %}
+                        Today
+                        {% elif snap.age_days == 1 %}
+                        1 day ago
+                        {% else %}
+                        {{ snap.age_days }} days ago
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-xs text-muted" style="margin-top: 0.75rem;">
+        {{ snapshot_data.count }} snapshot{{ 's' if snapshot_data.count != 1 }} on NAS &middot;
+        Retention policy: keeping {{ snapshot_data.keep_count }} most recent
+    </p>
+    {% else %}
+    <div class="empty-state" style="padding: 2rem;">
+        <h3>No snapshots found</h3>
+        <p>Weekly snapshots will appear here once the backup script creates them (Sundays) and the snapshot poll runs.</p>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}

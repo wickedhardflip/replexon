@@ -155,27 +155,6 @@
     <p class="text-xs text-muted" style="margin-top: 0.75rem;">These paths are configured in the <code>.env</code> file on the server.</p>
 </div>
 
-<!-- Change Password -->
-<div class="settings-section">
-    <h3>Change Password</h3>
-    <form method="post" action="/settings/password" style="max-width: 400px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="form-group">
-            <label class="form-label" for="current_password">Current Password</label>
-            <input type="password" id="current_password" name="current_password" class="form-input" required>
-        </div>
-        <div class="form-group">
-            <label class="form-label" for="new_password">New Password</label>
-            <input type="password" id="new_password" name="new_password" class="form-input" required minlength="8">
-        </div>
-        <div class="form-group">
-            <label class="form-label" for="confirm_password">Confirm New Password</label>
-            <input type="password" id="confirm_password" name="confirm_password" class="form-input" required minlength="8">
-        </div>
-        <button type="submit" class="btn btn-blue btn-sm">Change Password</button>
-    </form>
-</div>
-
 <!-- About -->
 <div class="settings-section">
     <h3>About RePlexOn</h3>

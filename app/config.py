@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # Manual backup rate limit (seconds)
     backup_cooldown: int = 300
 
+    # Snapshot settings
+    rsync_password_file: str = "/etc/replexon/rsync.secret"
+    snapshot_dir: str = "plex-snapshots"
+    snapshot_keep_count: int = 4
+
 
 settings = Settings()
 

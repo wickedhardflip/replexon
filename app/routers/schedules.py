@@ -10,6 +10,7 @@ from app.dependencies import get_current_user, get_db
 from app.models.user import User
 from app.services.backup_runner import can_trigger_backup, trigger_backup
 from app.services.cron_service import get_backup_cron_entries, update_cron_entry
+from app.services.snapshot_service import get_cached_snapshots
 from app.utils.security import generate_csrf_token, validate_csrf_token
 
 router = APIRouter()
@@ -25,6 +26,7 @@ async def schedules_page(
     """Display backup schedules from crontab."""
     entries = get_backup_cron_entries()
     can_run, cooldown_msg = can_trigger_backup()
+    snapshot_data = get_cached_snapshots(db)
 
     return templates.TemplateResponse(
         "pages/schedules.html",
@@ -38,6 +40,7 @@ async def schedules_page(
             "can_trigger": can_run,
             "cooldown_msg": cooldown_msg,
             "csrf_token": generate_csrf_token(),
+            "snapshot_data": snapshot_data,
         },
     )
 
