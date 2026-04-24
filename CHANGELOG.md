@@ -4,6 +4,7 @@
 
 ### Added
 - NAS snapshot retention dashboard on Schedules page (via rsync --list-only)
+- Restore guide as top-level nav page with context-aware rsync commands
 - Log rotation config (weekly, 4 rotations, compressed via copytruncate)
 - Restore documentation (`docs/restore.md`)
 - Safe SQLite `.backup` before rsync (with automatic fallback)
