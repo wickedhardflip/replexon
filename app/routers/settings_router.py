@@ -1,4 +1,4 @@
-"""Settings routes: email config, paths, password change, about."""
+"""Settings routes: email config, paths, restore guide, about."""
 
 from pathlib import Path
 from typing import Dict, Optional
@@ -208,3 +208,30 @@ async def test_email(
     return RedirectResponse(url="/settings?error=" + message.replace(" ", "+"), status_code=303)
 
 
+@router.get("/restore", response_class=HTMLResponse)
+async def restore_page(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """Restore guide page."""
+    backup_destination = _get_setting(db, "backup_destination", settings.backup_destination)
+    plex_data_path = _get_setting(db, "plex_data_path", settings.plex_data_path)
+
+    rsync_dest = backup_destination or "user@NAS_IP::module"
+    if "://" in rsync_dest:
+        rsync_dest = rsync_dest.split("://", 1)[1]
+
+    return templates.TemplateResponse(
+        "pages/restore.html",
+        {
+            "request": request,
+            "user": user,
+            "active_page": "settings",
+            "rsync_dest": rsync_dest,
+            "plex_data_path": plex_data_path,
+            "rsync_password_file": settings.rsync_password_file,
+            "snapshot_dir": settings.snapshot_dir,
+            "csrf_token": generate_csrf_token(),
+        },
+    )

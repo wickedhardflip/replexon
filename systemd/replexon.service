@@ -16,7 +16,7 @@ RestartSec=5
 ProtectSystem=strict
 PrivateTmp=true
 ReadWritePaths=/opt/replexon/data
-ReadOnlyPaths=/var/log/plex-backup.log /var/log/plex-backup-tracking.log
+ReadOnlyPaths=/var/log/plex-backup.log /var/log/plex-backup-tracking.log /etc/replexon
 
 # Resource limits
 MemoryMax=256M

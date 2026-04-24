@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Restore Guide - RePlexOn{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Restore Guide</h2>
+    <a href="/settings" class="btn btn-secondary btn-sm">&larr; Settings</a>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h3>Before You Start</h3>
+    <p class="text-sm" style="margin-bottom: 0.75rem;"><strong>Stop Plex</strong> before restoring to prevent database corruption:</p>
+    <pre class="code-block"><code># Snap install
+sudo snap stop plexmediaserver
+
+# Apt/deb install
+sudo systemctl stop plexmediaserver</code></pre>
+    <p class="text-sm" style="margin-top: 0.75rem;">Optionally back up the current state first:</p>
+    <pre class="code-block"><code>sudo cp -a "{{ plex_data_path or '/var/snap/plexmediaserver/common/Library/Application Support/Plex Media Server' }}" \
+  "/tmp/plex-pre-restore-$(date +%Y%m%d)"</code></pre>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h3>Full Restore from Daily Mirror</h3>
+    <p class="text-sm" style="margin-bottom: 0.75rem;">Restores the most recent backup:</p>
+    <pre class="code-block"><code>rsync -avh --password-file={{ rsync_password_file }} \
+  {{ rsync_dest }}/plex-current/ \
+  "{{ plex_data_path or '/path/to/plex/data' }}/"</code></pre>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h3>Restore from Weekly Snapshot</h3>
+    <p class="text-sm" style="margin-bottom: 0.75rem;">List available snapshots:</p>
+    <pre class="code-block"><code>rsync --list-only --password-file={{ rsync_password_file }} \
+  {{ rsync_dest }}/{{ snapshot_dir }}/</code></pre>
+    <p class="text-sm" style="margin: 0.75rem 0;">Restore a specific snapshot (replace the date):</p>
+    <pre class="code-block"><code>rsync -avh --password-file={{ rsync_password_file }} \
+  {{ rsync_dest }}/{{ snapshot_dir }}/2026-01-01/ \
+  "{{ plex_data_path or '/path/to/plex/data' }}/"</code></pre>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h3>Database-Only Restore</h3>
+    <p class="text-sm" style="margin-bottom: 0.75rem;">If you only need the Plex database (watch history, metadata, ratings, playlists):</p>
+    <pre class="code-block"><code>rsync -avh --password-file={{ rsync_password_file }} \
+  {{ rsync_dest }}/plex-current/Plug-in\ Support/Databases/ \
+  "{{ plex_data_path or '/path/to/plex/data' }}/Plug-in Support/Databases/"</code></pre>
+    <p class="text-sm" style="margin-top: 0.75rem;">If the backup used safe SQLite <code>.backup</code>, remove stale WAL/SHM files:</p>
+    <pre class="code-block"><code>rm -f "{{ plex_data_path or '/path/to/plex/data' }}/Plug-in Support/Databases/"*.db-wal
+rm -f "{{ plex_data_path or '/path/to/plex/data' }}/Plug-in Support/Databases/"*.db-shm</code></pre>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h3>After Restore</h3>
+    <ol class="text-sm" style="padding-left: 1.25rem; line-height: 2;">
+        <li><strong>Fix ownership</strong> to match your Plex install:
+            <pre class="code-block" style="margin: 0.5rem 0;"><code># Snap: sudo chown -R root:root "/path/to/plex/data"
+# Apt:  sudo chown -R plex:plex "/path/to/plex/data"</code></pre>
+        </li>
+        <li><strong>Start Plex:</strong> <code>sudo snap start plexmediaserver</code> or <code>sudo systemctl start plexmediaserver</code></li>
+        <li><strong>Verify</strong> at <code>http://your-server:32400/web</code> &mdash; check libraries, watch history, and server settings</li>
+    </ol>
+</div>
+
+<div class="card">
+    <h3>What Gets Restored</h3>
+    <p class="text-sm" style="margin-bottom: 0.5rem;">RePlexOn backs up Plex <strong>configuration, database, metadata, and artwork</strong> &mdash; NOT media files.</p>
+    <div class="text-sm text-muted" style="line-height: 1.8;">
+        <strong>Included:</strong> watch history, metadata, ratings, playlists, posters/artwork, server settings, plugin data, preferences<br>
+        <strong>Not included:</strong> movies, TV shows, music, and other media files (these must still be accessible at their original paths)
+    </div>
+</div>
+{% endblock %}

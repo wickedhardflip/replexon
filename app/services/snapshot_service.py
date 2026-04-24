@@ -13,7 +13,7 @@ from app.models.setting import AppSetting
 
 logger = logging.getLogger("replexon")
 
-DATE_DIR_RE = re.compile(r"(\d{4}-\d{2}-\d{2})/$")
+DATE_DIR_RE = re.compile(r"(\d{4}-\d{2}-\d{2})/?$")
 
 
 def _get_setting(db: DBSession, key: str, default: str = "") -> str:

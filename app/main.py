@@ -105,6 +105,17 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed initial log import (non-fatal)")
 
+    # Initial snapshot fetch on startup
+    try:
+        from app.services.snapshot_service import fetch_snapshots
+        db = SessionLocal()
+        try:
+            fetch_snapshots(db)
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("Failed initial snapshot fetch (non-fatal)")
+
     # Start background tasks
     poll_task = asyncio.create_task(_poll_logs())
     nas_task = asyncio.create_task(_poll_nas_health())
