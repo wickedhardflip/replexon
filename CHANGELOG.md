@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Optional single sign-on behind a reverse proxy (`TRUST_PROXY_AUTH`, off by default). Trusts `Remote-User` only from a trusted network AND with a shared proxy secret; see README "Behind a reverse proxy".
+
 ## [1.1.0] - 2026-04-23
 
 ### Added

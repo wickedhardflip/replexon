@@ -23,7 +23,12 @@ def get_current_user(
     session_token: Optional[str] = Cookie(None),
     db: DBSession = Depends(get_db),
 ) -> User:
-    """Get the currently authenticated user from the session cookie."""
+    """Get the currently authenticated user: a trusted reverse-proxy sign-in if enabled, else the session cookie."""
+    from app.proxy_auth import proxy_user
+    user = proxy_user(request, db)
+    if user:
+        return user
+
     if not session_token:
         raise HTTPException(
             status_code=status.HTTP_303_SEE_OTHER,

@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     app_port: int = 9847
     debug: bool = False
 
+    # Single sign-on behind a reverse proxy (off unless set in .env). See README "Behind a reverse proxy".
+    trust_proxy_auth: bool = False
+    proxy_auth_secret: str = ""
+    trusted_proxy_networks: str = "172.16.0.0/12"
+    proxy_auth_user_map: str = ""
+
     # Database
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'replexon.db'}"
 

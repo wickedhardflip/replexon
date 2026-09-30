@@ -282,6 +282,42 @@ python replexon.py import-logs
 
 ---
 
+## Behind a reverse proxy (single sign-on)
+
+If RePlexOn sits behind a reverse proxy that already signs people in (for example Caddy with `forward_auth`), it can accept that sign-in instead of showing its own login page. **It is off by default.** Turn it on only when the proxy is set up as described here, because the proxy vouches for who the user is.
+
+RePlexOn trusts the `Remote-User` header only when **both** of these are true:
+
+1. The connection comes from a trusted network (`TRUSTED_PROXY_NETWORKS`, default `172.16.0.0/12`, which covers Docker networks), so a device on your LAN can't fake it.
+2. The request carries an `X-Homelab-Proxy` header matching a shared secret (`PROXY_AUTH_SECRET`), which the proxy adds.
+
+If either check fails, RePlexOn falls back to its normal login. Add to `.env`:
+
+```bash
+TRUST_PROXY_AUTH=true
+PROXY_AUTH_SECRET=<long random value, the same one the proxy sends>
+TRUSTED_PROXY_NETWORKS=172.16.0.0/12
+PROXY_AUTH_USER_MAP=alice=admin   # optional: proxy username=RePlexOn username
+```
+
+The proxy must remove any client-sent `Remote-User` and `X-Homelab-Proxy` headers, then set its own. Example Caddy route:
+
+```
+handle @replexon {
+	request_header -Remote-User
+	request_header -X-Homelab-Proxy
+	forward_auth portal:8000 {
+		uri /auth/verify
+		copy_headers Remote-User
+	}
+	reverse_proxy replexon-host:9847 {
+		header_up X-Homelab-Proxy {env.PROXY_SECRET}
+	}
+}
+```
+
+Keep uvicorn's default `--forwarded-allow-ips` (127.0.0.1) so RePlexOn sees the proxy's real address.
+
 ## CLI Commands
 
 RePlexOn includes a TV-themed CLI:
