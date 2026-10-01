@@ -62,3 +62,34 @@ def test_empty_secret_never_trusts(db, on, monkeypatch):
 def test_non_ascii_secret_is_refused_not_a_crash(db, on):
     add_user(db)
     assert proxy_auth.proxy_user(req(secret="s3crét"), db) is None
+
+
+def run(coro):
+    import asyncio
+    return asyncio.run(coro)
+
+
+def test_login_page_sends_a_proxy_user_to_the_dashboard(db, on):
+    from app.routers.auth import login_page
+    add_user(db)
+    r = run(login_page(req(), db))
+    assert r.status_code == 303 and r.headers["location"] == "/dashboard"
+
+
+def test_sign_out_under_sso_goes_to_the_proxy_sign_out(db, on, monkeypatch):
+    from app.routers.auth import logout
+    monkeypatch.setattr(proxy_auth.settings, "proxy_auth_logout_url", "https://sso.example.com/logout")
+    add_user(db)
+    request = req()
+    request.cookies = {}
+    r = run(logout(request, None, db))
+    assert r.status_code == 303 and r.headers["location"] == "https://sso.example.com/logout"
+
+
+def test_sign_out_without_sso_still_goes_to_login(db, monkeypatch):
+    from app.routers.auth import logout
+    monkeypatch.setattr(proxy_auth.settings, "proxy_auth_logout_url", "https://sso.example.com/logout")
+    request = req(peer="192.168.4.20")
+    request.cookies = {}
+    r = run(logout(request, None, db))
+    assert r.headers["location"] == "/login"

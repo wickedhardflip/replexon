@@ -298,20 +298,23 @@ TRUST_PROXY_AUTH=true
 PROXY_AUTH_SECRET=<long random value, the same one the proxy sends>
 TRUSTED_PROXY_NETWORKS=172.16.0.0/12
 PROXY_AUTH_USER_MAP=alice=admin   # optional: proxy username=RePlexOn username
+PROXY_AUTH_LOGOUT_URL=https://sso.example.com/logout   # optional: where Sign out sends proxy users
 ```
 
-The proxy must remove any client-sent `Remote-User` and `X-Homelab-Proxy` headers, then set its own. Example Caddy route:
+The proxy must remove any client-sent `Remote-User` and `X-Homelab-Proxy` headers, then set its own. Example Caddy route (the `route` block matters: without it Caddy runs `forward_auth` before `request_header` and strips the header it just set):
 
 ```
 handle @replexon {
-	request_header -Remote-User
-	request_header -X-Homelab-Proxy
-	forward_auth portal:8000 {
-		uri /auth/verify
-		copy_headers Remote-User
-	}
-	reverse_proxy replexon-host:9847 {
-		header_up X-Homelab-Proxy {env.PROXY_SECRET}
+	route {
+		request_header -Remote-User
+		request_header -X-Homelab-Proxy
+		forward_auth portal:8000 {
+			uri /auth/verify
+			copy_headers Remote-User
+		}
+		reverse_proxy replexon-host:9847 {
+			header_up X-Homelab-Proxy {env.PROXY_SECRET}
+		}
 	}
 }
 ```

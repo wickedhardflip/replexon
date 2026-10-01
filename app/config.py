@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     proxy_auth_secret: str = ""
     trusted_proxy_networks: str = "172.16.0.0/12"
     proxy_auth_user_map: str = ""
+    proxy_auth_logout_url: str = ""  # where Sign out goes under single sign-on (the proxy's sign-out page)
 
     # Database
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'replexon.db'}"

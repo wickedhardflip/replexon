@@ -8,7 +8,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session as DBSession
 
+from app.config import settings
 from app.dependencies import get_current_user, get_db
+from app.proxy_auth import proxy_user
 from app.models.user import User
 from app.services.auth_service import authenticate_user, create_session, delete_session
 from app.utils.security import generate_csrf_token, validate_csrf_token
@@ -33,8 +35,10 @@ def _record_attempt(client_ip: str) -> None:
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    """Display the login form."""
+async def login_page(request: Request, db: DBSession = Depends(get_db)):
+    """Display the login form (people signed in by the proxy are already in)."""
+    if proxy_user(request, db):
+        return RedirectResponse(url="/dashboard", status_code=303)
     return templates.TemplateResponse(
         "pages/login.html",
         {"request": request, "csrf_token": generate_csrf_token()},
@@ -111,6 +115,8 @@ async def logout(
     session_token = request.cookies.get("session_token")
     if session_token:
         delete_session(db, session_token)
-    response = RedirectResponse(url="/login", status_code=303)
+    # Under single sign-on the proxy's session is what keeps you in, so sign out there.
+    target = settings.proxy_auth_logout_url if settings.proxy_auth_logout_url and proxy_user(request, db) else "/login"
+    response = RedirectResponse(url=target, status_code=303)
     response.delete_cookie("session_token")
     return response
