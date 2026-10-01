@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    secret_key: str = "change-me-to-a-random-string"
+    secret_key: str = Field(default="change-me-to-a-random-string", repr=False)
     app_name: str = "RePlexOn"
     app_host: str = "0.0.0.0"
     app_port: int = 9847
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
 
     # Single sign-on behind a reverse proxy (off unless set in .env). See README "Behind a reverse proxy".
     trust_proxy_auth: bool = False
-    proxy_auth_secret: str = ""
+    proxy_auth_secret: str = Field(default="", repr=False)
     trusted_proxy_networks: str = "172.16.0.0/12"
     proxy_auth_user_map: str = ""
     proxy_auth_logout_url: str = ""  # where Sign out goes under single sign-on (the proxy's sign-out page)
