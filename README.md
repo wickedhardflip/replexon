@@ -321,6 +321,36 @@ handle @replexon {
 
 Keep uvicorn's default `--forwarded-allow-ips` (127.0.0.1) so RePlexOn sees the proxy's real address.
 
+## Running as its own user
+
+RePlexOn doesn't need root. Run it as a no-login system user and give sudo exactly the commands it uses:
+
+```bash
+sudo useradd --system --no-create-home --home-dir /opt/replexon --shell /usr/sbin/nologin replexon
+sudo chown -R replexon:replexon /opt/replexon /etc/replexon
+# systemd drop-in: /etc/systemd/system/replexon.service.d/10-user.conf -> [Service] User=replexon Group=replexon
+```
+
+`/etc/sudoers.d/replexon` (mode 0440, check with `visudo -c`):
+
+```
+replexon ALL=(root) NOPASSWD: /usr/bin/crontab -l -u root
+replexon ALL=(root) NOPASSWD: /usr/bin/systemctl start plex-backup-manual.service
+```
+
+The first line lets the Schedules page read root's crontab. Leave `CRON_EDIT_ENABLED` off with this setup: a sudo rule that writes root's crontab is the same as root. The second runs manual backups from a root-only script through a oneshot unit, outside RePlexOn's sandbox and memory limit:
+
+```ini
+# /etc/systemd/system/plex-backup-manual.service
+[Unit]
+Description=Plex backup (manual, started by RePlexOn)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/backup-plex.sh
+```
+
+Then set `BACKUP_COMMAND="sudo -n /usr/bin/systemctl start plex-backup-manual.service"` in `.env`. `systemctl start` waits for the backup to finish, so RePlexOn still sees when it ends and whether it failed.
+
 ## CLI Commands
 
 RePlexOn includes a TV-themed CLI:

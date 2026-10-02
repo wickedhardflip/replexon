@@ -1,5 +1,6 @@
 """Trigger manual backup via subprocess with rate limiting."""
 
+import shlex
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -47,8 +48,12 @@ def trigger_backup(db: DBSession, script_path: Optional[str] = None) -> Union[Ba
     if script_path is None:
         script_path = settings.backup_script_path
 
-    if not Path(script_path).exists():
+    if settings.backup_command:
+        cmd = shlex.split(settings.backup_command)
+    elif not Path(script_path).exists():
         return f"Backup script not found: {script_path}"
+    else:
+        cmd = ["bash", script_path]
 
     run = BackupRun(
         backup_type="manual",
@@ -62,7 +67,7 @@ def trigger_backup(db: DBSession, script_path: Optional[str] = None) -> Union[Ba
 
     try:
         _running_process = subprocess.Popen(
-            ["bash", script_path],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Backup paths (server-side)
     backup_log_path: str = "/var/log/plex-backup.log"
     backup_script_path: str = "/usr/local/bin/backup-plex.sh"
+    # Manual backups run this instead of `bash <script>` when set, e.g. when the script is root-only:
+    # BACKUP_COMMAND="sudo -n /usr/bin/systemctl start plex-backup-manual.service" (see README "Running as its own user")
+    backup_command: str = ""
     backup_destination: str = ""
     plex_data_path: str = ""
 
