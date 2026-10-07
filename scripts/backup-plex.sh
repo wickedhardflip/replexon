@@ -128,6 +128,19 @@ fail_early() {  # fail_early <code> <message>
   exit "$1"
 }
 
+# Plex databases use a custom "icu_root" collation that stock sqlite3 lacks, so
+# quick_check cannot prepare on them. Treat that one error as "can't tell" and fall
+# back to reading the schema, which still catches a truncated or unreadable file.
+db_is_sound() {
+  local out
+  out=$(sqlite3 "$1" 'PRAGMA quick_check;' 2>&1)
+  [ "$out" = "ok" ] && return 0
+  case "$out" in
+    *"no such collation sequence"*) sqlite3 "$1" 'SELECT count(*) FROM sqlite_master;' >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Copy every database consistently into $STAGING_DIR. Sets DB_COUNT / DB_FAILED.
 copy_databases() {
   local raw="$STAGING_DIR/raw" db_file name attempt ok ext
@@ -145,8 +158,7 @@ copy_databases() {
       for ext in -wal -shm; do
         [ -f "$db_file$ext" ] && { cp "$db_file$ext" "$raw/$name$ext" 2>/dev/null || true; }
       done
-      if sqlite3 "$raw/$name" ".backup '$STAGING_DIR/$name'" \
-         && [ "$(sqlite3 "$STAGING_DIR/$name" 'PRAGMA quick_check;' 2>&1)" = "ok" ]; then
+      if sqlite3 "$raw/$name" ".backup '$STAGING_DIR/$name'" && db_is_sound "$STAGING_DIR/$name"; then
         ok=true
         break
       fi
@@ -230,7 +242,7 @@ has_item metadata || EXCLUDES+=(--exclude='/Metadata/' --exclude='/Media/'
                                 --exclude='/Plug-in Support/Metadata Combination/')
 
 RSYNC_OUTPUT_FILE="$SCRATCH_DIR/plex-backup-rsync-output.$$"
-rsync -avh --delete --stats "${RSYNC_AUTH_OPTS[@]}" "${EXCLUDES[@]}" \
+rsync -av --delete --stats "${RSYNC_AUTH_OPTS[@]}" "${EXCLUDES[@]}" \
     "$PLEX_DATA/" \
     "${RSYNC_DEST}/plex-current/" \
     2>&1 | tee "$RSYNC_OUTPUT_FILE"
@@ -263,11 +275,11 @@ if [ $EXIT -eq 0 ] && [ "$DAY_OF_WEEK" -eq 7 ]; then
     echo "Sunday detected - creating weekly snapshot"
     if [ "$BACKUP_MODE" = "local" ]; then
         mkdir -p "${BACKUP_DIR}/${SNAPSHOT_DIR}/${TODAY}"
-        rsync -avh --stats \
+        rsync -av --stats \
             "${BACKUP_DIR}/plex-current/" \
             "${BACKUP_DIR}/${SNAPSHOT_DIR}/${TODAY}/"
     else
-        rsync -avh --stats "${RSYNC_AUTH_OPTS[@]}" \
+        rsync -av --stats "${RSYNC_AUTH_OPTS[@]}" \
             "${RSYNC_DEST}/plex-current/" \
             "${RSYNC_DEST}/${SNAPSHOT_DIR}/${TODAY}/"
     fi
