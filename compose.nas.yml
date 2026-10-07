@@ -1,0 +1,37 @@
+# RePlexOn writing straight to a NAS share. Two options:
+#
+#  A) rsync daemon on the NAS (Synology: Control Panel > File Services > rsync).
+#     Use compose.yml as-is (the /backups mount can be dropped) and pick
+#     "NAS (rsync daemon)" as the destination in the setup wizard.
+#
+#  B) Mount the share as a Docker volume (below), then pick "Local folder" with /backups.
+#     Edit the address, share and credentials file. Keep the credentials file chmod 600.
+services:
+  replexon:
+    image: ghcr.io/wickedhardflip/replexon:latest
+    container_name: replexon
+    environment:
+      - TZ=America/New_York
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - replexon-data:/data
+      - /path/to/plex/config:/plex:ro
+      - nas-backups:/backups
+    ports:
+      - "9847:9847"
+    restart: unless-stopped
+
+volumes:
+  replexon-data:
+  # SMB/CIFS share
+  nas-backups:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: "//192.168.1.100/plex-backups"
+      o: "credentials=/root/.nas-credentials,uid=1000,gid=1000,vers=3.0"
+  # NFS alternative: replace the block above with
+  #   type: nfs
+  #   o: "addr=192.168.1.100,rw,nfsvers=4"
+  #   device: ":/volume1/plex-backups"

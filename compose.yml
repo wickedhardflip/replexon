@@ -1,0 +1,23 @@
+# RePlexOn - copy this file, edit the three host paths, then: docker compose up -d
+# Open http://your-server:9847 and the setup wizard does the rest (admin account,
+# what to back up, where, when, and email).
+services:
+  replexon:
+    image: ghcr.io/wickedhardflip/replexon:latest
+    container_name: replexon
+    environment:
+      - TZ=America/New_York      # schedules run in this time zone
+      - PUID=1000                # use the same user/group IDs as your Plex container
+      - PGID=1000
+    volumes:
+      - replexon-data:/data                     # RePlexOn's settings, history and logs
+      - /path/to/plex/config:/plex:ro           # your Plex config folder, read-only
+      - /path/to/backups:/backups               # where backups go (any disk or mounted share)
+      # Optional, only for the advanced "Pause Plex during the database copy" mode:
+      # - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "9847:9847"
+    restart: unless-stopped
+
+volumes:
+  replexon-data:

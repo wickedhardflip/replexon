@@ -15,7 +15,7 @@ set -euo pipefail
 APP_NAME="RePlexOn"
 INSTALL_DIR="/opt/replexon"
 CONFIG_DIR="/etc/replexon"
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+SCRIPT_DIR=$(cd "$(dirname "$0")/.." && pwd)  # repo root (this file lives in native/)
 INTERACTIVE=false
 
 # Colors
@@ -213,7 +213,7 @@ install_backup_scripts() {
 
     # Create rsync secret file
     if [ ! -f "$CONFIG_DIR/rsync.secret" ]; then
-        cp "$INSTALL_DIR/scripts/rsync.secret.example" "$CONFIG_DIR/rsync.secret"
+        cp "$INSTALL_DIR/native/rsync.secret.example" "$CONFIG_DIR/rsync.secret"
         chmod 600 "$CONFIG_DIR/rsync.secret"
         log "Created $CONFIG_DIR/rsync.secret (edit with your rsync password)"
     else
@@ -257,7 +257,7 @@ install_backup_scripts() {
     fi
 
     # Install logrotate config
-    cp "$INSTALL_DIR/config/logrotate.d/replexon" /etc/logrotate.d/replexon
+    cp "$INSTALL_DIR/native/logrotate-replexon" /etc/logrotate.d/replexon
     chmod 644 /etc/logrotate.d/replexon
     log "Logrotate config installed"
 
@@ -299,7 +299,7 @@ setup_crontab() {
 
 install_systemd_service() {
     log "Installing systemd service..."
-    cp "$INSTALL_DIR/systemd/replexon.service" /etc/systemd/system/replexon.service
+    cp "$INSTALL_DIR/native/systemd/replexon.service" /etc/systemd/system/replexon.service
 
     # Update user/group in service file
     sed -i "s/^User=.*/User=$SERVICE_USER/" /etc/systemd/system/replexon.service
