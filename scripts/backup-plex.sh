@@ -185,8 +185,8 @@ if [ "$BACKUP_MODE" = "nas" ]; then
         fail_early 1 "NAS mode needs the NAS address, rsync user and module (Settings > Destination)"
     fi
     RSYNC_DEST="${RSYNC_USER}@${NAS_IP}::${RSYNC_MODULE}"
-    RSYNC_AUTH_OPTS=()
-    [ -z "$RSYNC_PASSWORD" ] && RSYNC_AUTH_OPTS=(--password-file="$RSYNC_PASSWORD_FILE")
+    RSYNC_AUTH_OPTS=(--no-o --no-g)   # a NAS rsync user cannot chown/chgrp; asking for it only produces exit 23
+    [ -z "$RSYNC_PASSWORD" ] && RSYNC_AUTH_OPTS+=(--password-file="$RSYNC_PASSWORD_FILE")
 else
     [ -n "$BACKUP_DIR" ] || fail_early 1 "No backup folder set (Settings > Destination)"
     RSYNC_DEST="$BACKUP_DIR"
