@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Tools the backup script tests need
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rsync sqlite3 bc
+      - run: pip install -r requirements-dev.txt
+      - run: bash -n scripts/*.sh native/*.sh docker/*.sh
+      - run: pytest -q
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: replexon:ci
+      - name: Starts and reports healthy
+        run: |
+          docker run -d --name replexon-ci -p 9847:9847 replexon:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9847/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs replexon-ci
+          exit 1

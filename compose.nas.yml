@@ -2,9 +2,9 @@
 #
 #  A) rsync daemon on the NAS (Synology: Control Panel > File Services > rsync).
 #     Use compose.yml as-is (the /backups mount can be dropped) and pick
-#     "NAS (rsync daemon)" as the destination in the setup wizard.
+#     "A NAS over rsync" as the destination in the setup wizard.
 #
-#  B) Mount the share as a Docker volume (below), then pick "Local folder" with /backups.
+#  B) Mount the share as a Docker volume (below), then pick "A folder" with /backups.
 #     Edit the address, share and credentials file. Keep the credentials file chmod 600.
 services:
   replexon:

@@ -37,7 +37,7 @@ rsync -avh --password-file=/etc/replexon/rsync.secret \
   "/var/snap/plexmediaserver/common/Library/Application Support/Plex Media Server/"
 ```
 
-Replace `backupuser`, `NAS_IP`, and `plex-backups` with your actual rsync user, NAS IP, and module name from `backup-plex.sh`.
+Replace `backupuser`, `NAS_IP`, and `plex-backups` with your actual rsync user, NAS IP, and module name from Settings > Where backups go.
 
 ## Restore from Weekly Snapshot
 

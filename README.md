@@ -1,22 +1,130 @@
-```
-  ____       ____  _            ___
- |  _ \ ___ |  _ \| | _____  __/ _ \ _ __
- | |_) / _ \| |_) | |/ _ \ \/ / | | | '_ \
- |  _ <  __/|  __/| |  __/>  <| |_| | | | |
- |_| \_\___||_|   |_|\___/_/\_\\___/|_| |_|
- ==========================================
-      "Previously on your Plex server..."
-```
+<p align="center"><img src="app/static/logo/replexon-sign.svg" alt="RePlexOn - Backup Line" width="420"></p>
 
 # RePlexOn
 
-A self-hosted backup system and monitoring dashboard for Plex Media Server. RePlexOn backs up your Plex **configuration, database, metadata, and settings** to a NAS or Synology device via rsync, then gives you a clean web dashboard to monitor backup status, browse history, view transfer stats, manage schedules, and configure email alerts.
+*"Previously on your Plex server..."*
 
-> **What gets backed up:** Plex stores its database, watch history, user accounts, posters/artwork, plugin data, preferences, and server settings in a data directory separate from your media files. This is what RePlexOn protects. **Your actual media library (movies, TV shows, music) is NOT backed up** -- those files are typically too large for this approach and should be managed separately. RePlexOn backs up everything you'd need to rebuild a Plex server without re-scanning and reconfiguring from scratch.
-
-**This project is provided as-is, free and open source under the MIT license.** It was built to solve a real problem on a real Plex server and is shared in the hope that it may be useful to others running similar setups. No warranty or support is provided -- see [Disclaimer](#disclaimer) below.
-
+[![Tests](https://github.com/wickedhardflip/replexon/actions/workflows/test.yml/badge.svg)](https://github.com/wickedhardflip/replexon/actions/workflows/test.yml)
+[![Image](https://img.shields.io/badge/ghcr.io-wickedhardflip%2Freplexon-2b6cb0?logo=docker&logoColor=white)](https://github.com/wickedhardflip/replexon/pkgs/container/replexon)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/punchybuttons)
+
+Self-hosted backups and a monitoring dashboard for Plex Media Server. RePlexOn copies
+your Plex **database, watch history, settings, plug-ins and (optionally) metadata** to
+a folder or a NAS on a schedule, keeps weekly snapshots, emails you when something
+goes wrong, and shows it all on one page.
+
+> **What gets backed up:** the Plex data folder (database, accounts, watch history,
+> artwork, preferences). **Not your media files.** It is what you need to rebuild a
+> Plex server without re-scanning and reconfiguring everything.
+
+Free and open source under the MIT license, provided as-is. See [Disclaimer](#disclaimer).
+
+---
+
+## Quick start (Docker)
+
+1. Save this as `compose.yml` and change the three host paths:
+
+```yaml
+services:
+  replexon:
+    image: ghcr.io/wickedhardflip/replexon:latest
+    container_name: replexon
+    environment:
+      - TZ=America/New_York      # schedules run in this time zone
+      - PUID=1000                # same user/group IDs as your Plex
+      - PGID=1000
+    volumes:
+      - replexon-data:/data                     # RePlexOn's settings, history and logs
+      - /path/to/plex/config:/plex:ro           # your Plex config folder, read-only
+      - /path/to/backups:/backups               # where backups go
+    ports:
+      - "9847:9847"
+    restart: unless-stopped
+
+volumes:
+  replexon-data:
+```
+
+2. `docker compose up -d`
+3. Open `http://your-server:9847`. The setup wizard asks for:
+   - an admin account
+   - where Plex is (auto-detected and checked)
+   - what to back up: **Essential**, **Standard** or **Full**
+   - where backups go: a folder, or a NAS over rsync
+   - when: daily, twice a day, weekly, or your own cron
+   - email (optional), with a test button
+
+That is it. No crontab, no editing scripts.
+
+Prefer `docker run`?
+
+```bash
+docker run -d --name replexon --restart unless-stopped -p 9847:9847 \
+  -e TZ=America/New_York -e PUID=1000 -e PGID=1000 \
+  -v replexon-data:/data \
+  -v /path/to/plex/config:/plex:ro \
+  -v /path/to/backups:/backups \
+  ghcr.io/wickedhardflip/replexon:latest
+```
+
+Images are built for `linux/amd64` and `linux/arm64`.
+
+## Plex in Docker
+
+If Plex is also a container:
+
+- **Config folder**: mount the same host folder your Plex container uses for `/config`
+  at `/plex`, **read-only** (`:ro`). RePlexOn finds the Plex Media Server folder inside.
+- **PUID / PGID**: use the same IDs as Plex (linuxserver/plex `PUID`/`PGID`,
+  plexinc/pms-docker `PLEX_UID`/`PLEX_GID`) so RePlexOn can read the files.
+- **Network**: RePlexOn reads files, it does not talk to Plex, so host networking or a
+  shared user-defined network both work. Put them on the same network if a reverse
+  proxy fronts both.
+- **Health**: the image has a `HEALTHCHECK` on `/health` (no login needed), so
+  `docker ps` shows `healthy`.
+
+A full two-service compose file and the optional "pause Plex during the database copy"
+mode are in [docs/plex-in-docker.md](docs/plex-in-docker.md).
+
+## Database safety
+
+Plex writes to its SQLite databases constantly, and a file copied mid-write may not
+open. By default RePlexOn makes a **safe copy**: it copies the database and its
+journal files to a scratch folder, runs SQLite's own `.backup` on that copy and checks
+the result. If that fails, the run shows **FAILED** in red with a "DB FAILED" badge.
+It never quietly copies the live files instead.
+
+Plex in Docker on the same host can optionally be **paused** for the few seconds the
+copy takes (needs the Docker socket). Both modes are explained on the Settings page
+and in [docs/configuration.md](docs/configuration.md#database-safety).
+
+## Backing up to a NAS
+
+Pick **A NAS over rsync** in the wizard to send straight to a Synology, TrueNAS or any
+rsync daemon, or mount a share at `/backups` (SMB/NFS examples in
+[`compose.nas.yml`](compose.nas.yml)). Setup for both: [docs/nas.md](docs/nas.md).
+
+Backups land as:
+
+```
+plex-current/            # latest backup, mirrored each run
+plex-snapshots/
+  2026-08-10/            # dated copy after each successful Sunday backup
+  2026-08-17/            # the newest N are kept (configurable)
+```
+
+## Without Docker
+
+RePlexOn also runs directly on Ubuntu/Debian with systemd:
+
+```bash
+git clone https://github.com/wickedhardflip/replexon.git && cd replexon
+sudo bash native/install.sh
+```
+
+Same web UI and wizard. See [native/README.md](native/README.md), including upgrading
+from 1.x (remove the old crontab lines).
 
 ---
 
@@ -30,468 +138,74 @@ A self-hosted backup system and monitoring dashboard for Plex Media Server. RePl
 |:-:|:-:|
 | ![Schedules](docs/screenshots/schedules.png?v=3) | ![Settings](docs/screenshots/settings.png?v=3) |
 
-| Login |
-|:-:|
-| ![Login](docs/screenshots/login.png?v=3) |
+## What you get
 
----
-
-## What It Does
-
-RePlexOn has two parts:
-
-### 1. Backup Scripts
-Three bash scripts (in `scripts/`) handle the actual backup work via cron. They target the **Plex data directory** -- the folder where Plex stores its database, metadata, thumbnails, watch history, user preferences, and server configuration (typically 5-50 GB depending on library size and metadata agents). This is NOT your media library.
-
-- **Daily mirror** (3 AM) -- rsync the Plex data directory to a NAS using rsync daemon protocol
-- **Weekly snapshots** (Sundays) -- after the daily mirror, create a dated copy for point-in-time recovery
-- **Snapshot cleanup** (Sunday 4 AM) -- remove old weekly snapshots, keeping the most recent 4
-- **Config self-backup** (1st of month) -- back up all scripts and configs to the NAS
-- **Email summary** -- concise daily email with duration, transfer size, total size, DB safety, and success rate (requires `mail`/`mailx`)
-
-### 2. Web Dashboard
-A FastAPI web application that reads the backup log files and presents:
-
-- **At-a-glance status** -- last backup result, total size, success rate, backup count
-- **DB safety indicator** -- shows whether the latest backup used SQLite `.backup` (safe) or fell back to live rsync
-- **Source and destination paths** -- see exactly where data is coming from and going to
-- **NAS health badge** -- background ping every 5 minutes with healthy/warning/stale/unreachable status
-- **Size and duration charts** -- track backup size and duration over time with daily bar charts
-- **Backup calendar heatmap** -- GitHub-contributions-style grid showing daily backup history (green/red/gray)
-- **Next backup countdown** -- parses your cron schedule and shows a live countdown to the next backup
-- **Failure clustering** -- detects consecutive failure streaks vs isolated one-offs with alert banners
-- **Live backup progress** -- real-time progress indicator with elapsed time when a backup is running
-- **Full history** -- filterable, searchable log table with date range picker and expandable detail rows
-- **Schedule viewer** -- reads your crontab and displays schedules in human-readable format
-- **Manual trigger** -- run a backup on demand with rate limiting
-- **Email notifications** -- SMTP configuration with test email and delivery log (auto-detects msmtp if installed)
-- **NAS snapshot dashboard** -- view weekly snapshots stored on NAS with age and retention policy
-- **Log rotation** -- logrotate config included for weekly rotation with compression (keeps 4 weeks)
-- **Settings UI** -- configure backup paths, email, and SMTP from the browser
-- **Dark mode** -- dark theme by default with light mode toggle, persisted via localStorage
-- **Mobile responsive** -- hamburger navigation menu for screens under 768px
-
-### How It Works
-
-The backup scripts write structured log markers to `/var/log/plex-backup.log`:
-
-```
-=== Plex Backup Started: Mon Feb 23 03:00:01 AM EST 2026 ===
-...rsync output...
-sent 24,265,611 bytes  received 114,210,946 bytes
-total size is 8,081,447,228  speedup is 58.36
-=== Plex Backup Completed Successfully: Mon Feb 23 03:13:23 AM EST 2026 ===
-```
-
-A lightweight tracking file (`plex-backup-tracking.log`) records daily results:
-
-```
-2026-02-20:success
-2026-02-21:success
-2026-02-22:failed
-```
-
-RePlexOn's background poller reads these files every 60 seconds, parses the markers, extracts transfer statistics, and stores everything in a local SQLite database. The dashboard then queries this database to render charts and tables.
-
----
-
-## Requirements
-
-- **OS**: Ubuntu 20.04+ or Debian 11+ (the installer checks for this)
-- **Python**: 3.9 or newer
-- **Plex Media Server**: Any installation method (snap, apt, manual)
-- **Backup target**: A NAS or Synology device with rsync daemon enabled (or any rsync-compatible destination)
-- **~50 MB disk**: For the app, venv, and database
-- **Network**: The Plex server must be able to reach the NAS via rsync (port 873) and optionally SSH (port 22 for snapshot cleanup)
-
-### Python Dependencies
-
-All handled automatically by the installer or `pip install -r requirements.txt`:
-
-```
-fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-jinja2>=3.1.4
-python-multipart>=0.0.18
-sqlalchemy>=2.0.36
-pydantic-settings>=2.6.0
-argon2-cffi>=23.1.0
-click>=8.1.7
-```
-
-No npm, no Node.js, no build tools. HTMX and Chart.js are vendored in `app/static/js/`.
-
----
-
-## Quick Start
-
-### Automated Install (Recommended)
-
-```bash
-git clone https://github.com/wickedhardflip/replexon.git
-cd replexon
-sudo bash install.sh --interactive
-```
-
-The interactive installer will:
-
-1. Verify you're on Ubuntu/Debian and running as root
-2. Install system dependencies (`python3`, `python3-venv`, `rsync`, optionally `msmtp`)
-3. Copy the app to `/opt/replexon` and create a Python virtual environment
-4. Auto-detect your Plex data path (checks snap, apt, and manual install locations)
-5. Prompt for NAS IP, rsync user/module, email settings
-6. Generate a cryptographic `SECRET_KEY` and write the `.env` file
-7. Install backup scripts to `/usr/local/bin/` with your settings
-8. Create `/etc/replexon/rsync.secret` (chmod 600) for rsync password storage
-9. Offer to add cron entries for the backup schedule
-10. Install and enable the systemd service
-11. Initialize the database and create your admin account
-
-A non-interactive mode (`sudo bash install.sh`) is also available -- it installs everything with defaults and prints the manual steps remaining.
-
-### Manual Setup
-
-```bash
-# Clone
-git clone https://github.com/wickedhardflip/replexon.git
-cd replexon
-
-# Python environment
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Configure
-cp .env.example .env
-nano .env  # Set SECRET_KEY and backup paths
-
-# Initialize
-python replexon.py init-db
-python replexon.py create-user --username admin
-
-# Run
-uvicorn app.main:app --host 0.0.0.0 --port 9847
-```
-
-Then visit `http://your-server:9847`
-
----
-
-## Backup Scripts
-
-The `scripts/` directory contains production-ready backup scripts for rsync to a NAS/Synology:
-
-| Script | Schedule | Purpose |
-|---|---|---|
-| `backup-plex.sh` | Daily 3 AM | Mirror Plex data to NAS + Sunday dated snapshots |
-| `cleanup-plex-snapshots.sh` | Sunday 4 AM | SSH to NAS, remove old snapshots (keeps 4) |
-| `backup-scripts.sh` | 1st of month 5 AM | Collect all scripts/configs, rsync to NAS |
-
-Each script has clearly marked configuration variables at the top. Edit these to match your setup:
-
-```bash
-PLEX_DATA="/var/snap/plexmediaserver/common/Library/Application Support/Plex Media Server"
-NAS_IP="192.168.1.100"
-RSYNC_USER="backupuser"
-RSYNC_MODULE="plex-backups"
-RSYNC_PASSWORD_FILE="/etc/replexon/rsync.secret"
-```
-
-**Credential handling**: rsync passwords are read from a file (`--password-file`), never embedded in scripts. The credential file is stored at `/etc/replexon/rsync.secret` with mode 600.
-
-### Database Safety
-
-The backup script uses SQLite's `.backup` API to create consistent snapshots of Plex's databases before rsyncing. This prevents corrupt or incomplete database backups while Plex is running.
-
-**How it works:**
-1. Before the main rsync, `sqlite3 .backup` creates safe copies of each `.db` file
-2. The main rsync excludes live database files (`.db`, `.db-wal`, `.db-shm`)
-3. A second rsync pushes the consistent snapshots to the NAS
-4. The staging directory is cleaned up automatically (even on failure)
-
-**Prerequisite:** `sqlite3` must be installed on the server (`sudo apt install sqlite3`). If sqlite3 is not available, the script falls back to rsyncing live database files (the previous behavior).
-
-See [`scripts/README.md`](scripts/README.md) for detailed setup instructions including NAS rsync daemon configuration, SSH key setup for the cleanup script, and crontab entries.
-
-For restore procedures, see [`docs/restore.md`](docs/restore.md).
-
----
+- **At-a-glance status**: last result, DB safety badge, size, success rate, NAS health
+- **Charts**: size and duration over time, a calendar heatmap of daily results
+- **Failure clustering**: tells a streak of failures from a one-off
+- **Live progress** while a backup runs, and a countdown to the next one
+- **History**: searchable, filterable log with per-run details and raw output
+- **Schedules**: presets or cron, run now, weekly snapshot list with retention
+- **Email**: on failure, on every run, or never; delivery log; test button
+- **Restore page**: copy-paste restore commands for your setup ([docs/restore.md](docs/restore.md))
+- **Light and dark** themes, mobile layout
 
 ## Configuration
 
-### Environment Variables (`.env`)
+Everything is in the web UI. Environment variables are for start-up only (time zone,
+user IDs, optional admin, reverse-proxy single sign-on). Reference:
+[docs/configuration.md](docs/configuration.md).
 
-| Variable | Default | Description |
-|---|---|---|
-| `SECRET_KEY` | *(required)* | Random string for session signing. Generate with: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
-| `APP_HOST` | `0.0.0.0` | Bind address |
-| `APP_PORT` | `9847` | Web dashboard port |
-| `BACKUP_LOG_PATH` | `/var/log/plex-backup.log` | Path to the rsync backup log file |
-| `BACKUP_SCRIPT_PATH` | `/usr/local/bin/backup-plex.sh` | Path to the backup script (for manual trigger) |
-| `BACKUP_DESTINATION` | *(optional)* | Displayed on dashboard (e.g., `rsync://user@NAS/module`) |
-| `PLEX_DATA_PATH` | *(optional)* | Displayed on dashboard (auto-detected by installer) |
-| `CRON_EDIT_ENABLED` | `false` | Allow editing cron schedules via the web UI |
-| `CRON_USER` | `root` | User whose crontab to read for schedule display |
-| `LOG_POLL_INTERVAL` | `60` | Seconds between log file checks |
-| `BACKUP_COOLDOWN` | `300` | Minimum seconds between manual backup triggers |
-| `RSYNC_PASSWORD_FILE` | `/etc/replexon/rsync.secret` | Path to rsync password file (for snapshot listing) |
-| `SNAPSHOT_DIR` | `plex-snapshots` | Directory name for weekly snapshots on NAS |
-| `SNAPSHOT_KEEP_COUNT` | `4` | Number of weekly snapshots to retain |
+Your settings, history and the generated secret key live in the `replexon-data`
+volume. Keep it: the SMTP and rsync passwords are encrypted with that key.
 
----
-
-## Production Deployment
-
-### systemd Service
-
-The included service file runs RePlexOn as a non-root user with security hardening:
+## Updating
 
 ```bash
-sudo cp systemd/replexon.service /etc/systemd/system/
-# Edit User= and Group= if needed
-sudo systemctl daemon-reload
-sudo systemctl enable replexon
-sudo systemctl start replexon
+docker compose pull && docker compose up -d
 ```
-
-Security features in the service file:
-- `ProtectSystem=strict` -- read-only filesystem except allowed paths
-- `PrivateTmp=true` -- isolated temp directory
-- `ReadWritePaths=/opt/replexon/data` -- only the data directory is writable
-- `ReadOnlyPaths` -- backup logs are read-only
-- `MemoryMax=256M`, `CPUQuota=25%` -- resource limits
-
-### Crontab Access
-
-If your backup cron jobs run as root, the service user needs sudo access to read the crontab:
-
-```bash
-# /etc/sudoers.d/replexon
-plex ALL=(root) NOPASSWD: /usr/bin/crontab -l -u root
-```
-
-### Import Historical Data
-
-If you have existing backup logs, import the history after first deploy:
-
-```bash
-cd /opt/replexon
-source venv/bin/activate
-python replexon.py import-logs
-```
-
----
-
-## Behind a reverse proxy (single sign-on)
-
-If RePlexOn sits behind a reverse proxy that already signs people in (for example Caddy with `forward_auth`), it can accept that sign-in instead of showing its own login page. **It is off by default.** Turn it on only when the proxy is set up as described here, because the proxy vouches for who the user is.
-
-RePlexOn trusts the `Remote-User` header only when **both** of these are true:
-
-1. The connection comes from a trusted network (`TRUSTED_PROXY_NETWORKS`, default `172.16.0.0/12`, which covers Docker networks), so a device on your LAN can't fake it.
-2. The request carries an `X-Homelab-Proxy` header matching a shared secret (`PROXY_AUTH_SECRET`), which the proxy adds.
-
-If either check fails, RePlexOn falls back to its normal login. Add to `.env`:
-
-```bash
-TRUST_PROXY_AUTH=true
-PROXY_AUTH_SECRET=<long random value, the same one the proxy sends>
-TRUSTED_PROXY_NETWORKS=172.16.0.0/12
-PROXY_AUTH_USER_MAP=alice=admin   # optional: proxy username=RePlexOn username
-PROXY_AUTH_LOGOUT_URL=https://sso.example.com/logout   # optional: where Sign out sends proxy users
-```
-
-The proxy must remove any client-sent `Remote-User` and `X-Homelab-Proxy` headers, then set its own. Example Caddy route (the `route` block matters: without it Caddy runs `forward_auth` before `request_header` and strips the header it just set):
-
-```
-handle @replexon {
-	route {
-		request_header -Remote-User
-		request_header -X-Homelab-Proxy
-		forward_auth portal:8000 {
-			uri /auth/verify
-			copy_headers Remote-User
-		}
-		reverse_proxy replexon-host:9847 {
-			header_up X-Homelab-Proxy {env.PROXY_SECRET}
-		}
-	}
-}
-```
-
-Keep uvicorn's default `--forwarded-allow-ips` (127.0.0.1) so RePlexOn sees the proxy's real address.
-
-## Running as its own user
-
-RePlexOn doesn't need root. Run it as a no-login system user and give sudo exactly the commands it uses:
-
-```bash
-sudo useradd --system --no-create-home --home-dir /opt/replexon --shell /usr/sbin/nologin replexon
-sudo chown -R replexon:replexon /opt/replexon /etc/replexon
-# systemd drop-in: /etc/systemd/system/replexon.service.d/10-user.conf -> [Service] User=replexon Group=replexon
-```
-
-`/etc/sudoers.d/replexon` (mode 0440, check with `visudo -c`):
-
-```
-replexon ALL=(root) NOPASSWD: /usr/bin/crontab -l -u root
-replexon ALL=(root) NOPASSWD: /usr/bin/systemctl start plex-backup-manual.service
-```
-
-The first line lets the Schedules page read root's crontab. Leave `CRON_EDIT_ENABLED` off with this setup: a sudo rule that writes root's crontab is the same as root. The second runs manual backups from a root-only script through a oneshot unit, outside RePlexOn's sandbox and memory limit:
-
-```ini
-# /etc/systemd/system/plex-backup-manual.service
-[Unit]
-Description=Plex backup (manual, started by RePlexOn)
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/backup-plex.sh
-```
-
-Then set `BACKUP_COMMAND="sudo -n /usr/bin/systemctl start plex-backup-manual.service"` in `.env`. `systemctl start` waits for the backup to finish, so RePlexOn still sees when it ends and whether it failed.
-
-## CLI Commands
-
-RePlexOn includes a TV-themed CLI:
-
-```bash
-python replexon.py init-db              # Initialize database tables
-python replexon.py create-user          # Create a user account
-python replexon.py import-logs          # Import backup history from log files
-python replexon.py reset-password       # Reset a user's password
-
-python replexon.py --broadcast          # Trigger a manual backup
-python replexon.py --rerun              # Show the most recent backup info
-python replexon.py --static             # Health check on backup files
-```
-
----
 
 ## Security
 
-### Application Security
+- Argon2id password hashing, server-side sessions, CSRF tokens on every form,
+  login rate limiting, strict security headers
+- SMTP and rsync passwords encrypted at rest and never sent back to the browser
+- Runs as an unprivileged user (`PUID`/`PGID`); the Plex folder is mounted read-only
+- The Docker socket is optional and only used to pause and resume Plex
+- HTMX and Chart.js are vendored: no CDNs, and the app never phones home
+- Optional single sign-on behind a reverse proxy, off by default
+  ([details](docs/configuration.md#behind-a-reverse-proxy-single-sign-on))
 
-- **Authentication**: Argon2id password hashing (memory-hard, resistant to GPU/ASIC attacks)
-- **Login rate limiting**: 5 attempts per minute per IP, returns 429 on excess
-- **Sessions**: Cryptographically random 64-character hex tokens, server-side storage, 30-day expiry
-- **CSRF Protection**: HMAC-signed tokens on all POST forms (including logout)
-- **Security headers**: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`
-- **Startup secret check**: Application refuses to start with the default `SECRET_KEY`
-- **No JavaScript frameworks**: HTMX and Chart.js are vendored -- no CDN dependencies, no supply chain risk
-- **No external API calls**: The app never phones home or contacts external services
-- **SQLite WAL mode**: Concurrent reads without blocking, crash-safe writes
-
-### Credential Security
-
-- rsync passwords are stored in `/etc/replexon/rsync.secret` (chmod 600), never in scripts
-- The `.env` file (containing `SECRET_KEY`) is chmod 600 and excluded from git
-- SMTP passwords are never stored -- RePlexOn delegates to msmtp which manages its own credentials
-- The `scripts/rsync.secret` pattern is in `.gitignore` to prevent accidental commits
-
-### Security Scanning
-
-This codebase has been scanned with [Semgrep](https://semgrep.dev/) (static analysis for Python/web security issues) with **0 findings**. We recommend running your own scans after any customization:
+## Development
 
 ```bash
-pip install semgrep
-semgrep scan --config auto app/
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
+uvicorn app.main:app --reload --port 9847
 ```
 
-### systemd Hardening
-
-The included service file restricts the application to:
-- Read-only access to the root filesystem (`ProtectSystem=strict`)
-- Write access only to `/opt/replexon/data`
-- Read-only access to backup log files
-- Private temp directory, memory and CPU limits
-
----
-
-## Project Structure
-
-```
-replexon/
-  app/
-    main.py              # FastAPI app + background log poller
-    config.py            # Pydantic Settings (.env loading)
-    database.py          # SQLAlchemy engine (SQLite WAL)
-    models/              # User, Session, BackupRun, AppSetting, EmailLog
-    routers/             # Auth, Dashboard, Logs, Schedules, Settings
-    services/            # Log parser, metrics, cron, backup runner, email, NAS health
-    templates/           # Jinja2 (base + pages + components)
-    static/              # CSS, JS (HTMX + Chart.js vendored), images
-  scripts/
-    backup-plex.sh       # Daily mirror + Sunday snapshots
-    cleanup-plex-snapshots.sh  # Weekly snapshot retention
-    backup-scripts.sh    # Monthly config self-backup
-    rsync.secret.example # Credential file template
-    README.md            # Detailed script setup guide
-  config/
-    logrotate.d/         # Logrotate config for backup logs
-  docs/
-    restore.md           # How to restore from backup
-    screenshots/         # Dashboard screenshots
-  systemd/               # systemd unit file
-  install.sh             # Automated installer (default + interactive)
-  replexon.py            # CLI entry point
-  requirements.txt       # Python dependencies
-```
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| **Backend** | Python 3.9+, FastAPI, SQLAlchemy 2.0, Pydantic Settings |
-| **Database** | SQLite with WAL mode (zero configuration) |
-| **Frontend** | Jinja2 templates, HTMX 2.0, Chart.js 4.x |
-| **Auth** | Argon2id hashing, server-side sessions, HMAC CSRF tokens |
-| **Backup** | rsync daemon protocol, bash scripts, cron scheduling |
-| **Deployment** | systemd service with security hardening |
-
-No npm. No Node.js. No build step. No external CDN dependencies.
-
----
-
-## Customization
-
-RePlexOn was built for a specific setup (Ubuntu server + Synology NAS via rsync daemon protocol) but can be adapted:
-
-- **Different NAS**: The backup scripts use standard rsync -- any rsync-compatible target works. Edit the variables at the top of each script.
-- **Different Plex install**: Change `PLEX_DATA` in `backup-plex.sh` to match your Plex data location. The default is the snap install path (`/var/snap/plexmediaserver/common/...`). For apt/deb installs, use `/var/lib/plexmediaserver/...`.
-- **Different backup method**: If you don't use rsync daemon protocol, modify the rsync commands. For SSH-based rsync, replace `rsync://user@host::module` with `user@host:/path/` syntax.
-- **Log format**: If you write your own backup script, match the log marker format exactly (see [How It Works](#how-it-works)) or the dashboard won't parse your logs.
-- **Port**: Change `APP_PORT` in `.env` (default 9847).
-
----
+The backup script tests need Linux with `rsync`, `sqlite3` and `bc` and are skipped
+elsewhere; CI runs them.
 
 ## Disclaimer
 
-**This software is provided "as-is" without warranty of any kind, express or implied.** Use at your own risk.
+**This software is provided "as-is" without warranty of any kind.** Use at your own risk.
 
-RePlexOn is a personal project shared freely in the hope that it may be useful to others managing Plex backup systems. It is not a commercial product. Specifically:
+- **No support**: issues and pull requests are welcome, responses are not guaranteed.
+- **Your responsibility**: check your backups yourself now and then. Do not rely on the
+  dashboard as the only proof they work.
+- **Data loss**: the authors are not responsible for data loss from use or misuse of
+  this software.
 
-- **No warranty**: There is no guarantee that this software will work correctly in your environment, protect your data, or be free of bugs.
-- **No support**: This is not a supported product. Issues and pull requests on GitHub are welcome but responses are not guaranteed.
-- **Your responsibility**: You are solely responsible for verifying that your backups are working correctly. Do not rely on this dashboard as your only confirmation that backups are running -- periodically verify your backup files directly on the NAS.
-- **Customization expected**: This was built for a specific setup. You will likely need to adjust paths, credentials, and configuration to match your environment.
-- **Security**: While we have taken care to follow security best practices and have run static analysis scans, no software is guaranteed to be free of vulnerabilities. Run your own security review before exposing this to untrusted networks.
-- **Data loss**: The authors are not responsible for any data loss resulting from the use or misuse of this software or its backup scripts.
+See the [MIT License](LICENSE).
 
-See the [MIT License](LICENSE) for full terms.
+## Contributing and support
 
----
-
-## Contributing
-
-Contributions are welcome. If you find a bug, have a feature request, or want to adapt RePlexOn for a different backup setup, feel free to open an issue or pull request.
-
-## Support
-
-If you find RePlexOn useful, consider buying me a coffee:
+Bug reports, ideas and pull requests are welcome. If RePlexOn is useful to you:
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/punchybuttons)
 
 ## License
 
-[MIT](LICENSE) -- free to use, modify, and distribute.
+[MIT](LICENSE)
