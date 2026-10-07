@@ -88,7 +88,7 @@
             <div class="stat-sub">{{ stats.last_backup.started_at.strftime('%b %d, %I:%M %p') }}</div>
             {% if stats.last_backup.db_safe is not none %}
             <div class="db-safety-badge {{ 'db-safe' if stats.last_backup.db_safe else 'db-live' }}">
-                {{ 'DB Safe' if stats.last_backup.db_safe else 'DB Live' }}
+                {{ 'DB Safe' if stats.last_backup.db_safe else 'DB FAILED' }}
             </div>
             {% endif %}
             {% else %}

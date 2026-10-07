@@ -1,0 +1,62 @@
+{% set current_preset = namespace(v='custom') %}
+{% for key, value in presets.items() %}{% if value == cfg.backup_items %}{% set current_preset.v = key %}{% endif %}{% endfor %}
+<form method="post" action="/settings/section/items">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <input type="hidden" name="here" value="{{ here_url }}">
+
+    <div class="sec">What to back up</div>
+    <label class="choice">
+        <input type="radio" name="preset" value="essential" {% if current_preset.v == 'essential' %}checked{% endif %}>
+        <span><b>Essential</b><p>Databases and Preferences.xml. Small and fast: your libraries, watch history and server identity.</p></span>
+    </label>
+    <label class="choice">
+        <input type="radio" name="preset" value="standard" {% if current_preset.v == 'standard' %}checked{% endif %}>
+        <span><b>Standard (recommended)</b><p>Essential plus plug-ins and their data.</p></span>
+    </label>
+    <label class="choice">
+        <input type="radio" name="preset" value="full" {% if current_preset.v == 'full' %}checked{% endif %}>
+        <span><b>Full</b><p>Everything above plus metadata and artwork. Restores without re-downloading posters, but can be many GB.</p></span>
+    </label>
+    <label class="choice">
+        <input type="radio" name="preset" value="custom" {% if current_preset.v == 'custom' %}checked{% endif %}>
+        <span><b>Custom</b><p>Pick items below. Databases are always included.</p></span>
+    </label>
+    <div style="margin: 0.25rem 0 0.5rem 1.5rem;">
+        {% for key, label in item_labels.items() %}
+        <label class="text-sm" style="display: block; margin-bottom: 0.25rem;">
+            <input type="checkbox" name="items" value="{{ key }}" {% if key in items %}checked{% endif %}
+                   {% if key == 'databases' %}disabled checked{% endif %}> {{ label }}
+        </label>
+        {% endfor %}
+    </div>
+    <p class="help">Never copied: Cache, Logs, Crash Reports, Codecs, Updates. Plex rebuilds those.
+        <a href="/api/plex-sizes" hx-get="/api/plex-sizes" hx-target="#plex-sizes" hx-swap="innerHTML">Show sizes</a>
+    </p>
+    <div id="plex-sizes"></div>
+
+    <div class="sec">Database safety</div>
+    <label class="choice">
+        <input type="radio" name="db_safety" value="safe_copy" {% if cfg.db_safety != 'pause_container' %}checked{% endif %}>
+        <span><b>Safe copy (default)</b>
+            <p>Plex keeps running. RePlexOn copies the database files to a scratch folder, then uses SQLite's own
+               backup command on that copy to produce one clean, checked file. If that fails, the run is marked
+               FAILED in red. It never falls back to copying the live database.</p></span>
+    </label>
+    <label class="choice">
+        <input type="radio" name="db_safety" value="pause_container" {% if cfg.db_safety == 'pause_container' %}checked{% endif %}>
+        <span><b>Pause Plex during the copy (advanced)</b>
+            <p>For Plex running in Docker on the same host. RePlexOn briefly pauses the Plex container while it
+               copies the database, then resumes it, even if the copy fails. Streams freeze for a few seconds.
+               Needs <code>/var/run/docker.sock</code> mounted into RePlexOn, which gives it control over Docker.
+               {% if not docker_sock %}<b>docker.sock is not mounted right now, so this falls back to safe copy.</b>{% endif %}</p></span>
+    </label>
+    <div class="form-group" style="margin-left: 1.5rem;">
+        <label class="form-label" for="plex_container">Plex container name</label>
+        <input type="text" id="plex_container" name="plex_container" class="form-input settings-input" value="{{ cfg.plex_container }}">
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-sm">{{ submit_label | default('Save') }}</button>
+    </div>
+</form>

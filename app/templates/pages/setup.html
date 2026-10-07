@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Setup - RePlexOn{% endblock %}
+
+{% block body %}
+<div class="ticket-page">
+    <div class="ticket wide">
+        <img class="logo" src="/static/logo/replexon-sign.svg" alt="RePlexOn - Backup Line">
+
+        <ol class="stops" aria-label="Setup progress">
+            {% for s in steps %}
+            <li class="{{ 'done' if loop.index0 < step_index else ('here' if loop.index0 == step_index else '') }}"
+                {% if loop.index0 == step_index %}aria-current="step"{% endif %}>{{ step_titles[s] }}</li>
+            {% endfor %}
+        </ol>
+
+        <h2 style="margin: 0 0 0.25rem;">{{ step_titles[step] }}</h2>
+
+        {% if request.query_params.get('error') %}
+        <div class="alert alert-error" role="alert">{{ request.query_params.get('error') }}</div>
+        {% endif %}
+        {% if request.query_params.get('success') %}
+        <div class="alert alert-success">{{ request.query_params.get('success') }}</div>
+        {% endif %}
+
+        {% set submit_label = 'Save and continue' %}
+        {% if step == 'admin' %}
+        <p class="sub">Create the account you will sign in with. There is only one.</p>
+        <form method="post" action="/setup/admin">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <input type="text" id="username" name="username" class="form-input" required autofocus autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="password">Password (8+ characters)</label>
+                <input type="password" id="password" name="password" class="form-input" required minlength="8" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="password_confirm">Password again</label>
+                <input type="password" id="password_confirm" name="password_confirm" class="form-input" required minlength="8" autocomplete="new-password">
+            </div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary">Create account</button></div>
+        </form>
+        {% elif step == 'plex' %}
+        <p class="sub">Where Plex keeps its data.</p>
+        {% include "components/form_plex.html" %}
+        {% elif step == 'items' %}
+        <p class="sub">Pick how much to copy and how to keep the database consistent.</p>
+        {% include "components/form_items.html" %}
+        {% elif step == 'destination' %}
+        <p class="sub">Where the backup copy and weekly snapshots live.</p>
+        {% include "components/form_destination.html" %}
+        {% elif step == 'schedule' %}
+        <p class="sub">RePlexOn runs backups itself. No crontab needed.</p>
+        {% include "components/form_schedule.html" %}
+        {% elif step == 'email' %}
+        <p class="sub">Optional. Leave the host blank to skip email.</p>
+        {% include "components/form_email.html" %}
+        {% else %}
+        <p class="sub">That is everything. You can change any of it later under Settings.</p>
+        <ul class="text-sm" style="margin: 0 0 1rem 1.25rem;">
+            <li>Plex: <code>{{ cfg.plex_data_path or 'not set' }}</code></li>
+            <li>Backing up: {{ items | join(', ') }}</li>
+            <li>Destination: {{ cfg.backup_dir if cfg.dest_mode == 'local' else cfg.rsync_user ~ '@' ~ cfg.nas_host ~ '::' ~ cfg.rsync_module }}</li>
+            <li>Schedule: <code>{{ backup_cron }}</code>{% if not backup_enabled %} (disabled){% endif %}</li>
+        </ul>
+        <form method="post" action="/setup/finish">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-actions"><button type="submit" class="btn btn-primary">Open the dashboard</button></div>
+        </form>
+        {% endif %}
+
+        {% if step not in ('admin', 'done') or prev_url %}
+        <div class="form-actions" style="justify-content: space-between;">
+            {% if prev_url %}<a href="{{ prev_url }}">&larr; Back</a>{% else %}<span></span>{% endif %}
+            {% if step not in ('admin', 'done') %}<a href="{{ next_url }}">Skip for now &rarr;</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

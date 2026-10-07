@@ -1,14 +1,18 @@
 """Pytest fixtures for RePlexOn."""
 import os
+import tempfile
 
-os.environ.setdefault("SECRET_KEY", "test-only-" + "0" * 54)  # the app refuses to start without one
+# Before any app import: a fixed test key and a throwaway data dir (never the repo's data/).
+os.environ.setdefault("SECRET_KEY", "test-only-" + "0" * 54)
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="replexon-test-")
+os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(os.environ["DATA_DIR"], "app.db")
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import user as _user_models  # noqa: F401  (registers the tables)
+import app.models  # noqa: F401  (registers the tables)
 
 
 @pytest.fixture

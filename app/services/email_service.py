@@ -1,137 +1,121 @@
-"""Send email notifications.
+"""Email notifications over direct SMTP (settings and encrypted password from the Settings page)."""
 
-Strategy:
-- If msmtp is installed, use it (it has stored credentials).
-- Otherwise, try direct SMTP from app_settings (works for servers
-  that don't require auth, e.g. internal relays).
-"""
-
-import shutil
 import smtplib
-import subprocess
-from email.mime.text import MIMEText
+import ssl
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Tuple
 
 from sqlalchemy.orm import Session as DBSession
 
-from app.models.setting import AppSetting
+from app.services.app_settings import get_config, get_secret
+
+SIGNATURE = '-- RePlexOn\n"Previously on your Plex server..."'
 
 
-def _get_setting(db: DBSession, key: str, default: str = "") -> str:
-    row = db.query(AppSetting).filter(AppSetting.key == key).first()
-    return row.value if row else default
-
-
-def _get_recipient(db: DBSession) -> str:
-    return _get_setting(db, "email_recipient")
-
-
-def _build_test_message(from_addr: str, to_addr: str) -> MIMEMultipart:
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "RePlexOn - Test Notification"
+def _message(from_addr: str, to_addr: str, subject: str, text: str) -> MIMEMultipart:
+    msg = MIMEMultipart()
+    msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_addr
-
-    text = (
-        "This is a test email from RePlexOn.\n\n"
-        "If you received this, your email settings are configured correctly.\n\n"
-        "-- RePlexOn\n"
-        '"Previously on your Plex server..."'
-    )
-    html = (
-        "<h2>RePlexOn Test Notification</h2>"
-        "<p>If you received this, your email settings are configured correctly.</p>"
-        "<hr>"
-        '<p style="color: #888; font-size: 12px;">'
-        '<em>"Previously on your Plex server..."</em></p>'
-    )
-
     msg.attach(MIMEText(text, "plain"))
-    msg.attach(MIMEText(html, "html"))
     return msg
 
 
-def _send_via_msmtp(to_addr: str, msg: MIMEMultipart) -> Tuple[bool, str]:
-    """Send email using msmtp (uses system-stored credentials)."""
-    try:
-        result = subprocess.run(
-            ["msmtp", "-t"],
-            input=msg.as_string(),
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode == 0:
-            return True, "Test email sent via msmtp"
-        return False, f"msmtp error: {result.stderr.strip()}"
-    except subprocess.TimeoutExpired:
-        return False, "msmtp timed out"
-    except FileNotFoundError:
-        return False, "msmtp not found"
-
-
-def _send_via_smtp(db: DBSession, to_addr: str, msg: MIMEMultipart) -> Tuple[bool, str]:
-    """Send email using direct SMTP (no auth - for internal relays)."""
-    host = _get_setting(db, "smtp_host")
-    port = int(_get_setting(db, "smtp_port", "587") or "587")
-    tls = _get_setting(db, "smtp_tls", "on") == "on"
-
+def _send(db: DBSession, subject: str, text: str) -> Tuple[bool, str]:
+    """Send one message to the configured recipient and log the attempt."""
+    cfg = get_config(db)
+    recipient = cfg["email_recipient"]
+    if not recipient:
+        return False, "Email recipient is not configured"
+    host = cfg["smtp_host"]
     if not host:
         return False, "SMTP host is not configured"
-
     try:
-        server = smtplib.SMTP(host, port, timeout=15)
-        if tls:
-            server.starttls()
-        server.sendmail(msg["From"], [to_addr], msg.as_string())
-        server.quit()
-        return True, "Test email sent via SMTP"
+        port = int(cfg["smtp_port"] or "587")
+    except ValueError:
+        return False, "SMTP port must be a number"
+
+    msg = _message(cfg["smtp_from"] or recipient, recipient, subject, text)
+    password = get_secret(db, "smtp_password")
+    try:
+        if cfg["smtp_tls"] == "ssl":
+            server = smtplib.SMTP_SSL(host, port, timeout=15, context=ssl.create_default_context())
+        else:
+            server = smtplib.SMTP(host, port, timeout=15)
+            if cfg["smtp_tls"] == "starttls":
+                server.starttls(context=ssl.create_default_context())
+        try:
+            if cfg["smtp_user"]:
+                server.login(cfg["smtp_user"], password)
+            server.sendmail(msg["From"], [recipient], msg.as_string())
+        finally:
+            try:
+                server.quit()
+            except smtplib.SMTPException:
+                pass
+        ok, message = True, f"Email sent to {recipient}"
+    except smtplib.SMTPAuthenticationError:
+        ok, message = False, "SMTP login failed (check user and password)"
     except smtplib.SMTPSenderRefused:
-        return False, "SMTP server requires authentication (configure msmtp on the server)"
+        ok, message = False, "SMTP server refused the sender (does it need a login?)"
     except smtplib.SMTPException as e:
-        return False, f"SMTP error: {e}"
+        ok, message = False, f"SMTP error: {e.__class__.__name__}"
     except OSError as e:
-        return False, f"Connection error: {e}"
+        ok, message = False, f"Connection error: {e.strerror or e.__class__.__name__}"
+
+    _log_email(db, recipient, subject, ok, "smtp", None if ok else message)
+    return ok, message
 
 
 def _log_email(db: DBSession, recipient: str, subject: str, success: bool, method: str, error: str = None):
     from app.models.email_log import EmailLog
-    log = EmailLog(
-        recipient=recipient,
-        subject=subject,
-        success=success,
-        method=method,
-        error_message=error,
-    )
-    db.add(log)
+    db.add(EmailLog(recipient=recipient, subject=subject, success=success, method=method, error_message=error))
     db.commit()
 
 
 def send_test_email(db: DBSession) -> Tuple[bool, str]:
-    """Send a test email. Uses msmtp if available, else direct SMTP."""
-    recipient = _get_recipient(db)
-    if not recipient:
-        return False, "Email recipient is not configured"
+    return _send(
+        db,
+        "RePlexOn - Test Notification",
+        "This is a test email from RePlexOn.\n\n"
+        "If you received this, your email settings are configured correctly.\n\n" + SIGNATURE,
+    )
 
-    from_addr = _get_setting(db, "smtp_from") or recipient
-    msg = _build_test_message(from_addr, recipient)
 
-    if shutil.which("msmtp"):
-        success, message = _send_via_msmtp(recipient, msg)
-        _log_email(db, recipient, "RePlexOn - Test Notification", success, "msmtp",
-                   None if success else message)
-        return success, message
+def notify_backup_result(db: DBSession, run) -> None:
+    """Email a finished run if the notify setting asks for it."""
+    notify_on = get_config(db)["notify_on"]
+    failed = run.status != "success"
+    if notify_on == "never" or (notify_on == "failure" and not failed) or (notify_on == "success" and failed):
+        return
+    if not get_config(db)["email_recipient"]:
+        return
 
-    success, message = _send_via_smtp(db, recipient, msg)
-    _log_email(db, recipient, "RePlexOn - Test Notification", success, "smtp",
-               None if success else message)
-    return success, message
+    kind = run.backup_type.replace("_", " ")
+    if failed:
+        subject = f"Plex Backup FAILED - {kind}"
+    else:
+        subject = f"Plex Backup OK - {kind}, {run.size_display}, {run.duration_display}"
+    lines = [
+        f"Status:      {'FAILED' if failed else 'OK'}",
+        f"Type:        {kind} ({run.triggered_by})",
+        f"Duration:    {run.duration_display}",
+        f"Total size:  {run.size_display}",
+    ]
+    if run.backup_type != "cleanup":
+        lines.append("DB safety:   " + ("consistent copy" if run.db_safe else "FAILED - databases not backed up"))
+    if failed:
+        lines.append(f"Error:       {run.error_message or 'unknown'}")
+        tail = "\n".join((run.raw_log or "").splitlines()[-15:])
+        if tail:
+            lines += ["", "Last log lines:", tail]
+    ok, _ = _send(db, subject, "\n".join(lines) + "\n\n" + SIGNATURE)
+    if ok:
+        run.email_sent = True
+        db.commit()
 
 
 def get_recent_email_logs(db: DBSession, limit: int = 10) -> list:
     from app.models.email_log import EmailLog
-    return (
-        db.query(EmailLog)
-        .order_by(EmailLog.sent_at.desc())
-        .limit(limit)
-        .all()
-    )
+    return db.query(EmailLog).order_by(EmailLog.sent_at.desc()).limit(limit).all()

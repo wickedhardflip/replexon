@@ -1,0 +1,25 @@
+<form method="post" action="/settings/section/plex">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <input type="hidden" name="here" value="{{ here_url }}">
+    {% if detected %}
+    <div class="sec">Found on this machine</div>
+    <ul class="text-sm" style="margin: 0 0 0.75rem 1.25rem;">
+        {% for d in detected %}<li><b>{{ d.label }}</b>: <code>{{ d.path }}</code></li>{% endfor %}
+    </ul>
+    {% endif %}
+    <div class="form-group">
+        <label class="form-label" for="plex_data_path">Plex data folder</label>
+        <input type="text" id="plex_data_path" name="plex_data_path" class="form-input" style="max-width: 600px;"
+               value="{{ cfg.plex_data_path }}" placeholder="/plex">
+        <p class="help">
+            In Docker, mount your Plex config folder read-only at <code>/plex</code>
+            (the host folder your Plex container maps to <code>/config</code>).
+            RePlexOn finds the "Plex Media Server" folder inside it. Native installs usually live in
+            <code>/var/lib/plexmediaserver</code>. The path is checked when you save.
+        </p>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-sm">{{ submit_label | default('Check and save') }}</button>
+    </div>
+</form>

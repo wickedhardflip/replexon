@@ -78,9 +78,9 @@ async def logs_page(
 
     # HTMX partial: only return the table + pagination
     if request.headers.get("HX-Request"):
-        return templates.TemplateResponse("components/log_table.html", ctx)
+        return templates.TemplateResponse(request, "components/log_table.html", ctx)
 
-    return templates.TemplateResponse("pages/logs.html", ctx)
+    return templates.TemplateResponse(request, "pages/logs.html", ctx)
 
 
 @router.get("/logs/{backup_id}", response_class=HTMLResponse)
@@ -94,13 +94,13 @@ async def backup_detail(
     backup = db.query(BackupRun).filter(BackupRun.id == backup_id).first()
     if not backup:
         return templates.TemplateResponse(
-            "pages/error.html",
+            request, "pages/error.html",
             {"request": request, "status_code": 404, "message": "Backup not found"},
             status_code=404,
         )
 
     return templates.TemplateResponse(
-        "pages/backup_detail.html",
+        request, "pages/backup_detail.html",
         {
             "request": request,
             "user": user,

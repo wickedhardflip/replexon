@@ -132,7 +132,8 @@ def init_db():
     from pathlib import Path
     from app.database import Base, engine
     import app.models  # noqa: F401 — register all models with Base.metadata
-    Path("data").mkdir(exist_ok=True)
+    from app.config import settings
+    Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     click.echo("[OK] Database initialized successfully.")
 

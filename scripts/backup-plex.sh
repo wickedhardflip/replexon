@@ -1,59 +1,62 @@
 #!/bin/bash
 # =============================================================================
-# backup-plex.sh - Daily Plex Media Server backup via rsync
+# backup-plex.sh - Plex Media Server backup via rsync (RePlexOn)
 #
-# Mirrors Plex data to a NAS/Synology using rsync daemon protocol.
-# On Sundays, creates an additional dated snapshot for weekly retention.
+# Mirrors the chosen parts of the Plex data folder to a local folder or an rsync
+# daemon on a NAS. On Sundays it also makes a dated snapshot for weekly retention.
 #
-# SAFE DATABASE BACKUP: Before rsyncing, this script uses SQLite's .backup
-# API to create consistent snapshots of Plex's databases. This prevents
-# corrupt or incomplete database backups while Plex is running. If sqlite3
-# is unavailable or .backup fails, falls back to live rsync (same as before).
+# DATABASE SAFETY (DB_SAFETY):
+#   safe_copy        (default) copy each .db with its -wal/-shm to scratch space, run
+#                    sqlite3 .backup on the copy, check it, and ship that. Plex keeps running.
+#   pause_container  pause the Plex container through /var/run/docker.sock while the
+#                    files are copied, then resume it. Needs the socket mounted.
+#   There is no live-file fallback: if a database cannot be copied consistently the
+#   run is marked FAILED (the rest of the data is still mirrored, and the last good
+#   database copy at the destination is left untouched).
 #
-# Log markers are parsed by RePlexOn dashboard (log_parser.py).
+# Configuration comes from the environment. RePlexOn passes it in from the Settings
+# page. Bare-metal cron use can put the same variables in /etc/replexon/backup.env.
+#
+# Log markers are parsed by RePlexOn (app/services/log_parser.py).
 # DO NOT change the marker format without updating the regex patterns.
-#
-# Schedule: daily at 3 AM via cron
-#   0 3 * * * /usr/local/bin/backup-plex.sh >/dev/null 2>&1
 # =============================================================================
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-# Plex data directory (where Plex stores its database, metadata, etc.)
-# Common locations:
-#   Snap install:    /var/snap/plexmediaserver/common/Library/Application Support/Plex Media Server
-#   Apt/deb install: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
-#   Manual install:  /opt/plexmediaserver/Library/Application Support/Plex Media Server
-PLEX_DATA="/var/snap/plexmediaserver/common/Library/Application Support/Plex Media Server"
+if [ -z "$REPLEXON_MANAGED" ] && [ -r "${REPLEXON_ENV_FILE:-/etc/replexon/backup.env}" ]; then
+    # shellcheck disable=SC1090
+    . "${REPLEXON_ENV_FILE:-/etc/replexon/backup.env}"
+fi
 
-# NAS/Synology rsync daemon settings
-NAS_IP="192.168.1.100"
-RSYNC_USER="backupuser"
-RSYNC_MODULE="plex-backups"
-RSYNC_PASSWORD_FILE="/etc/replexon/rsync.secret"
+# -- Configuration ------------------------------------------------------------
+PLEX_DATA="${PLEX_DATA:-/plex}"
+BACKUP_MODE="${BACKUP_MODE:-local}"            # local | nas
+BACKUP_DIR="${BACKUP_DIR:-/backups}"
+NAS_IP="${NAS_IP:-}"
+RSYNC_USER="${RSYNC_USER:-}"
+RSYNC_MODULE="${RSYNC_MODULE:-}"
+RSYNC_PASSWORD_FILE="${RSYNC_PASSWORD_FILE:-/data/rsync.secret}"
+LOG_FILE="${BACKUP_LOG_PATH:-/data/logs/plex-backup.log}"
+TRACKING_FILE="${LOG_FILE%.log}-tracking.log"
+SNAPSHOT_DIR="${SNAPSHOT_DIR:-plex-snapshots}"
+BACKUP_ITEMS="${BACKUP_ITEMS:-databases,preferences,plugins}"
+DB_SAFETY="${DB_SAFETY:-safe_copy}"
+PLEX_CONTAINER="${PLEX_CONTAINER:-plex}"
+DOCKER_SOCK="${DOCKER_SOCK:-/var/run/docker.sock}"
+SCRATCH_DIR="${SCRATCH_DIR:-/tmp}"
 
-# Backup log paths (must match RePlexOn .env BACKUP_LOG_PATH)
-LOG_FILE="/var/log/plex-backup.log"
-TRACKING_FILE="/var/log/plex-backup-tracking.log"
-
-# Snapshot settings
-SNAPSHOT_DIR="plex-snapshots"
-
-# Optional: email notification (requires mail/mailx)
-EMAIL_TO=""  # Set to email address, or leave empty to disable
-DASHBOARD_URL="http://your-server:9847"
-
-# ── Do not edit below this line ────────────────────────────────────────────────
+# -- Setup --------------------------------------------------------------------
+mkdir -p "$(dirname "$LOG_FILE")"
+exec > >(tee -a "$LOG_FILE") 2>&1   # stdout (docker logs / RePlexOn) and the log file
 
 TODAY=$(date +%Y-%m-%d)
 DAY_OF_WEEK=$(date +%u)  # 1=Monday, 7=Sunday
-RSYNC_DEST="${RSYNC_USER}@${NAS_IP}::${RSYNC_MODULE}"
+[ -n "$FORCE_SNAPSHOT" ] && DAY_OF_WEEK=7
 
-# Staging directory for safe database copies
-STAGING_DIR="/tmp/plex-db-safe"
 DB_DIR="$PLEX_DATA/Plug-in Support/Databases"
+STAGING_DIR="$SCRATCH_DIR/replexon-db.$$"
 SAFE_DB_SUCCESS=false
+PAUSED=false
 
-# ── Helper Functions ──────────────────────────────────────────────────────────
+# -- Helper Functions ---------------------------------------------------------
 
 format_bytes() {
   local bytes=$1
@@ -82,211 +85,214 @@ format_duration() {
 parse_rsync_stats() {
   local stats_file="$1"
   XFER_FILES=$(grep "Number of regular files transferred:" "$stats_file" 2>/dev/null | grep -oP '[\d,]+$' | tr -d ',')
-  TOTAL_FILES=$(grep "Number of files:" "$stats_file" 2>/dev/null | head -1 | grep -oP '[\d,]+' | head -1 | tr -d ',')
   TOTAL_SIZE=$(grep "Total file size:" "$stats_file" 2>/dev/null | grep -oP '[\d,]+' | head -1 | tr -d ',')
   XFER_SIZE=$(grep "Total transferred file size:" "$stats_file" 2>/dev/null | grep -oP '[\d,]+' | head -1 | tr -d ',')
 }
 
 record_backup_result() {
-  local result=$1
-  local timestamp=$(date +%Y-%m-%d)
-  echo "$timestamp:$result" >> "$TRACKING_FILE"
+  echo "$(date +%Y-%m-%d):$1" >> "$TRACKING_FILE"
+  tail -n 30 "$TRACKING_FILE" > "$TRACKING_FILE.tmp" && mv "$TRACKING_FILE.tmp" "$TRACKING_FILE"
+}
 
-  if [ -f "$TRACKING_FILE" ]; then
-    tail -n 30 "$TRACKING_FILE" > "$TRACKING_FILE.tmp"
-    mv "$TRACKING_FILE.tmp" "$TRACKING_FILE"
+has_item() {
+  case ",$BACKUP_ITEMS," in *",$1,"*) return 0 ;; esac
+  return 1
+}
+
+docker_api() {  # docker_api pause|unpause
+  curl -sf -o /dev/null --max-time 30 --unix-socket "$DOCKER_SOCK" \
+    -X POST "http://localhost/containers/${PLEX_CONTAINER}/$1"
+}
+
+resume_plex() {
+  if [ "$PAUSED" = true ]; then
+    if docker_api unpause; then
+      echo "Resumed Plex container: $PLEX_CONTAINER"
+    else
+      echo "ERROR: could not resume Plex container $PLEX_CONTAINER - run: docker unpause $PLEX_CONTAINER"
+    fi
+    PAUSED=false
   fi
 }
 
-cleanup_staging() {
-    if [ -d "$STAGING_DIR" ]; then
-        rm -rf "$STAGING_DIR"
-    fi
+finish() {
+  resume_plex
+  rm -rf "$STAGING_DIR"
 }
-trap cleanup_staging EXIT
+trap finish EXIT
 
-# Record start time
+fail_early() {  # fail_early <code> <message>
+  echo "ERROR: $2"
+  echo "=== Plex Backup FAILED with code $1: $(date) ==="
+  record_backup_result "failed"
+  exit "$1"
+}
+
+# Copy every database consistently into $STAGING_DIR. Sets DB_COUNT / DB_FAILED.
+copy_databases() {
+  local raw="$STAGING_DIR/raw" db_file name attempt ok ext
+  mkdir -p "$raw"
+  DB_COUNT=0
+  DB_FAILED=0
+  for db_file in "$DB_DIR"/*.db; do
+    [ -f "$db_file" ] || continue
+    name=$(basename "$db_file")
+    echo "Backing up: $name ($(du -m "$db_file" | cut -f1) MB)"
+    ok=false
+    for attempt in 1 2; do
+      rm -f "$raw/$name" "$raw/$name-wal" "$raw/$name-shm" "$STAGING_DIR/$name"
+      cp "$db_file" "$raw/$name" || continue
+      for ext in -wal -shm; do
+        [ -f "$db_file$ext" ] && { cp "$db_file$ext" "$raw/$name$ext" 2>/dev/null || true; }
+      done
+      if sqlite3 "$raw/$name" ".backup '$STAGING_DIR/$name'" \
+         && [ "$(sqlite3 "$STAGING_DIR/$name" 'PRAGMA quick_check;' 2>&1)" = "ok" ]; then
+        ok=true
+        break
+      fi
+      echo "WARNING: copy of $name was not consistent (attempt $attempt)"
+    done
+    rm -f "$raw/$name" "$raw/$name-wal" "$raw/$name-shm"
+    if [ "$ok" = true ]; then
+      DB_COUNT=$((DB_COUNT + 1))
+    else
+      echo "ERROR: could not make a consistent copy of $name"
+      DB_FAILED=$((DB_FAILED + 1))
+    fi
+  done
+  rm -rf "$raw"
+}
+
+# -- Start --------------------------------------------------------------------
 BACKUP_START=$(date +%s)
-BACKUP_START_TIME=$(date '+%-I:%M %p')
 
 echo "=== Plex Backup Started: $(date) ==="
 
-# ── Safe Database Snapshot ────────────────────────────────────────────────────
-if command -v sqlite3 >/dev/null 2>&1; then
-    if [ -d "$DB_DIR" ]; then
-        mkdir -p "$STAGING_DIR"
-        DB_COUNT=0
-        DB_FAILED=0
-        DB_START=$(date +%s)
-
-        echo "--- Safe database snapshot: starting ---"
-
-        for db_file in "$DB_DIR"/*.db; do
-            [ -f "$db_file" ] || continue
-            db_name=$(basename "$db_file")
-            db_size=$(du -m "$db_file" | cut -f1)
-            echo "Backing up: $db_name ($db_size MB)"
-
-            if sqlite3 "$db_file" ".backup '$STAGING_DIR/$db_name'"; then
-                DB_COUNT=$((DB_COUNT + 1))
-            else
-                echo "WARNING: sqlite3 .backup failed for $db_name (exit $?)"
-                DB_FAILED=$((DB_FAILED + 1))
-            fi
-        done
-
-        DB_ELAPSED=$(( $(date +%s) - DB_START ))
-
-        if [ "$DB_FAILED" -eq 0 ] && [ "$DB_COUNT" -gt 0 ]; then
-            SAFE_DB_SUCCESS=true
-            echo "--- Safe database snapshot: complete ($DB_COUNT databases, ${DB_ELAPSED}s) ---"
-        else
-            echo "WARNING: Safe snapshot had failures ($DB_FAILED failed, $DB_COUNT succeeded). Falling back to live rsync."
-            cleanup_staging
-        fi
-    else
-        echo "WARNING: Database directory not found: $DB_DIR. Skipping safe snapshot."
+if [ "$BACKUP_MODE" = "nas" ]; then
+    if [ -z "$NAS_IP" ] || [ -z "$RSYNC_USER" ] || [ -z "$RSYNC_MODULE" ]; then
+        fail_early 1 "NAS mode needs the NAS address, rsync user and module (Settings > Destination)"
     fi
+    RSYNC_DEST="${RSYNC_USER}@${NAS_IP}::${RSYNC_MODULE}"
+    RSYNC_AUTH_OPTS=()
+    [ -z "$RSYNC_PASSWORD" ] && RSYNC_AUTH_OPTS=(--password-file="$RSYNC_PASSWORD_FILE")
 else
-    echo "WARNING: sqlite3 not installed. Skipping safe database snapshot (databases will be rsynced live)."
-    echo "Install with: sudo apt install sqlite3"
+    [ -n "$BACKUP_DIR" ] || fail_early 1 "No backup folder set (Settings > Destination)"
+    RSYNC_DEST="$BACKUP_DIR"
+    RSYNC_AUTH_OPTS=()
+    mkdir -p "$BACKUP_DIR/plex-current" || fail_early 1 "Cannot write to $BACKUP_DIR"
 fi
 
-# ── Daily Mirror ──────────────────────────────────────────────────────────────
-RSYNC_OUTPUT_FILE="/tmp/plex-backup-rsync-output.$$"
+echo "Mode: $BACKUP_MODE | Source: $PLEX_DATA | Dest: $RSYNC_DEST | Items: $BACKUP_ITEMS | DB safety: $DB_SAFETY"
 
-if [ "$SAFE_DB_SUCCESS" = true ]; then
-    rsync -avh --delete --stats \
-        --password-file="$RSYNC_PASSWORD_FILE" \
-        --exclude='Plug-in Support/Databases/*.db' \
-        --exclude='Plug-in Support/Databases/*.db-shm' \
-        --exclude='Plug-in Support/Databases/*.db-wal' \
-        "$PLEX_DATA/" \
-        "${RSYNC_DEST}/plex-current/" \
-        2>&1 | tee "$RSYNC_OUTPUT_FILE"
-else
-    rsync -avh --delete --stats \
-        --password-file="$RSYNC_PASSWORD_FILE" \
-        "$PLEX_DATA/" \
-        "${RSYNC_DEST}/plex-current/" \
-        2>&1 | tee "$RSYNC_OUTPUT_FILE"
+[ -d "$DB_DIR" ] || fail_early 2 "Plex databases not found at: $DB_DIR (check the Plex location in Settings)"
+command -v sqlite3 >/dev/null 2>&1 || fail_early 2 "sqlite3 is not installed; it is required for a safe database copy"
+
+# -- Safe Database Snapshot ---------------------------------------------------
+DB_START=$(date +%s)
+echo "--- Safe database snapshot: starting ---"
+
+if [ "$DB_SAFETY" = "pause_container" ]; then
+    if [ ! -S "$DOCKER_SOCK" ]; then
+        echo "WARNING: pause mode needs $DOCKER_SOCK mounted; using safe copy without pausing"
+    elif docker_api pause; then
+        PAUSED=true
+        echo "Paused Plex container: $PLEX_CONTAINER"
+    else
+        echo "WARNING: could not pause container '$PLEX_CONTAINER'; using safe copy without pausing"
+    fi
 fi
 
+copy_databases
+resume_plex
+
+DB_ELAPSED=$(( $(date +%s) - DB_START ))
+if [ "$DB_FAILED" -eq 0 ] && [ "$DB_COUNT" -gt 0 ]; then
+    SAFE_DB_SUCCESS=true
+    echo "--- Safe database snapshot: complete ($DB_COUNT databases, ${DB_ELAPSED}s) ---"
+else
+    echo "ERROR: Plex database backup FAILED ($DB_FAILED failed, $DB_COUNT copied). Databases were NOT backed up this run."
+fi
+
+# -- Daily Mirror -------------------------------------------------------------
+EXCLUDES=(
+    --exclude='/Cache/' --exclude='/Plug-in Support/Caches/' --exclude='/Logs/'
+    --exclude='/Crash Reports/' --exclude='/Diagnostics/' --exclude='/Updates/'
+    --exclude='/Codecs/' --exclude='/Drivers/'
+    # Databases only ever come from the consistent copies above, never the live files.
+    --exclude='/Plug-in Support/Databases/*.db'
+    --exclude='/Plug-in Support/Databases/*.db-shm'
+    --exclude='/Plug-in Support/Databases/*.db-wal'
+)
+has_item preferences || EXCLUDES+=(--exclude='/Preferences.xml')
+has_item plugins || EXCLUDES+=(--exclude='/Plug-ins/' --exclude='/Scanners/'
+                               --exclude='/Plug-in Support/Data/' --exclude='/Plug-in Support/Preferences/')
+has_item metadata || EXCLUDES+=(--exclude='/Metadata/' --exclude='/Media/'
+                                --exclude='/Plug-in Support/Metadata Combination/')
+
+RSYNC_OUTPUT_FILE="$SCRATCH_DIR/plex-backup-rsync-output.$$"
+rsync -avh --delete --stats "${RSYNC_AUTH_OPTS[@]}" "${EXCLUDES[@]}" \
+    "$PLEX_DATA/" \
+    "${RSYNC_DEST}/plex-current/" \
+    2>&1 | tee "$RSYNC_OUTPUT_FILE"
 EXIT=${PIPESTATUS[0]}
 
 parse_rsync_stats "$RSYNC_OUTPUT_FILE"
 rm -f "$RSYNC_OUTPUT_FILE"
 
-# ── Push Safe Database Copies ─────────────────────────────────────────────────
+# -- Push Safe Database Copies ------------------------------------------------
 if [ $EXIT -eq 0 ] && [ "$SAFE_DB_SUCCESS" = true ]; then
-    echo "Syncing safe database copies to NAS..."
-    rsync -avh \
-        --password-file="$RSYNC_PASSWORD_FILE" \
+    echo "Syncing safe database copies..."
+    [ "$BACKUP_MODE" = "local" ] && mkdir -p "${RSYNC_DEST}/plex-current/Plug-in Support/Databases"
+    rsync -avh "${RSYNC_AUTH_OPTS[@]}" \
         "$STAGING_DIR/" \
         "${RSYNC_DEST}/plex-current/Plug-in Support/Databases/"
-
     DB_PUSH_EXIT=$?
     if [ $DB_PUSH_EXIT -ne 0 ]; then
-        echo "WARNING: Failed to sync safe database copies (exit $DB_PUSH_EXIT)"
+        echo "ERROR: failed to sync safe database copies (exit $DB_PUSH_EXIT)"
+        EXIT=$DB_PUSH_EXIT
     fi
 fi
 
-# ── Sunday Snapshot ──────────────────────────────────────────────────────────
-SNAPSHOT_CREATED=false
+# A run without a good database copy is a failed run.
+if [ $EXIT -eq 0 ] && [ "$SAFE_DB_SUCCESS" != true ]; then
+    EXIT=3
+fi
 
-if [ "$DAY_OF_WEEK" -eq 7 ]; then
+# -- Sunday Snapshot ----------------------------------------------------------
+if [ $EXIT -eq 0 ] && [ "$DAY_OF_WEEK" -eq 7 ]; then
     echo "Sunday detected - creating weekly snapshot"
-    rsync -avh --stats \
-        --password-file="$RSYNC_PASSWORD_FILE" \
-        "${RSYNC_DEST}/plex-current/" \
-        "${RSYNC_DEST}/${SNAPSHOT_DIR}/${TODAY}/"
+    if [ "$BACKUP_MODE" = "local" ]; then
+        mkdir -p "${BACKUP_DIR}/${SNAPSHOT_DIR}/${TODAY}"
+        rsync -avh --stats \
+            "${BACKUP_DIR}/plex-current/" \
+            "${BACKUP_DIR}/${SNAPSHOT_DIR}/${TODAY}/"
+    else
+        rsync -avh --stats "${RSYNC_AUTH_OPTS[@]}" \
+            "${RSYNC_DEST}/plex-current/" \
+            "${RSYNC_DEST}/${SNAPSHOT_DIR}/${TODAY}/"
+    fi
     SNAP_EXIT=$?
     if [ $SNAP_EXIT -eq 0 ]; then
-        SNAPSHOT_CREATED=true
         echo "Weekly snapshot created: ${SNAPSHOT_DIR}/${TODAY}/"
     else
         echo "WARNING: Weekly snapshot failed with code $SNAP_EXIT"
     fi
 fi
 
-# ── Calculate Duration ────────────────────────────────────────────────────────
-BACKUP_END=$(date +%s)
-BACKUP_DURATION=$((BACKUP_END - BACKUP_START))
-DURATION_STR=$(format_duration $BACKUP_DURATION)
-
-# ── Success Rate ──────────────────────────────────────────────────────────────
-SUCCESS_TOTAL=$(wc -l < "$TRACKING_FILE" 2>/dev/null || echo "0")
-SUCCESS_COUNT=$(grep -c ":success" "$TRACKING_FILE" 2>/dev/null || echo "0")
-if [ "$SUCCESS_TOTAL" -gt 0 ]; then
-  SUCCESS_RATE="$SUCCESS_COUNT/$SUCCESS_TOTAL ($(( SUCCESS_COUNT * 100 / SUCCESS_TOTAL ))%)"
-else
-  SUCCESS_RATE="No history"
-fi
-
-# ── Format Sizes ──────────────────────────────────────────────────────────────
+# -- Summary ------------------------------------------------------------------
+DURATION_STR=$(format_duration $(( $(date +%s) - BACKUP_START )))
 TOTAL_SIZE_STR="unknown"
 XFER_SIZE_STR="unknown"
-XFER_FILES_STR="${XFER_FILES:-0} files"
-
 [ -n "$TOTAL_SIZE" ] && TOTAL_SIZE_STR=$(format_bytes "$TOTAL_SIZE")
 [ -n "$XFER_SIZE" ] && XFER_SIZE_STR=$(format_bytes "$XFER_SIZE")
+echo "Duration: $DURATION_STR | Transferred: $XFER_SIZE_STR (${XFER_FILES:-0} files) | Total: $TOTAL_SIZE_STR"
 
-# ── Log Result and Send Email ─────────────────────────────────────────────────
+# -- Log Result ---------------------------------------------------------------
 if [ $EXIT -eq 0 ]; then
     echo "=== Plex Backup Completed Successfully: $(date) ==="
     record_backup_result "success"
-
-    if [ -n "$EMAIL_TO" ]; then
-        if [ "$SNAPSHOT_CREATED" = true ]; then
-            SUBJECT="Plex Backup OK + Snapshot — ${TOTAL_SIZE_STR}, ${DURATION_STR}"
-        else
-            SUBJECT="Plex Backup OK — ${TOTAL_SIZE_STR}, ${DURATION_STR}"
-        fi
-
-        if [ "$SAFE_DB_SUCCESS" = true ]; then
-            DB_LINE="DB Safety:    sqlite3 .backup (consistent)"
-        else
-            DB_LINE="DB Safety:    WARNING — live rsync (no safe snapshot)"
-        fi
-
-        BODY="Daily mirror completed at ${BACKUP_START_TIME}
-
-Duration:     ${DURATION_STR}
-Transferred:  ${XFER_SIZE_STR} (${XFER_FILES_STR})
-Total Size:   ${TOTAL_SIZE_STR}
-${DB_LINE}
-Success Rate: ${SUCCESS_RATE}"
-
-        if [ "$SNAPSHOT_CREATED" = true ]; then
-            BODY="${BODY}
-
-Weekly snapshot created: ${TODAY}"
-        fi
-
-        BODY="${BODY}
-
-${DASHBOARD_URL}"
-
-        echo "$BODY" | mail -s "$SUBJECT" "$EMAIL_TO"
-    fi
 else
     echo "=== Plex Backup FAILED with code $EXIT: $(date) ==="
     record_backup_result "failed"
-
-    if [ -n "$EMAIL_TO" ]; then
-        SUBJECT="Plex Backup FAILED — exit code ${EXIT}"
-
-        BODY="Backup FAILED at ${BACKUP_START_TIME}
-
-Duration:     ${DURATION_STR}
-Exit Code:    ${EXIT}
-Success Rate: ${SUCCESS_RATE}
-
-Last 15 log lines:
-$(tail -15 "$LOG_FILE")
-
-${DASHBOARD_URL}"
-
-        echo "$BODY" | mail -s "$SUBJECT" "$EMAIL_TO"
-    fi
 fi
+exit $EXIT

@@ -1,43 +1,57 @@
 #!/bin/bash
 # =============================================================================
-# cleanup-snapshots.sh - Weekly snapshot retention cleanup
+# cleanup-snapshots.sh - Weekly snapshot retention (RePlexOn)
 #
-# Removes oldest snapshots beyond the retention count from local backup dir.
+# Keeps the newest SNAPSHOT_KEEP_COUNT dated snapshots and removes older ones,
+# in a local backup folder or on an rsync daemon (no SSH needed).
 #
-# Log markers are parsed by RePlexOn dashboard (log_parser.py).
+# Log markers are parsed by RePlexOn (app/services/log_parser.py).
 # DO NOT change the marker format without updating the regex patterns.
 # =============================================================================
 
-# ── Configuration (from environment) ─────────────────────────────────────────
+if [ -z "$REPLEXON_MANAGED" ] && [ -r "${REPLEXON_ENV_FILE:-/etc/replexon/backup.env}" ]; then
+    # shellcheck disable=SC1090
+    . "${REPLEXON_ENV_FILE:-/etc/replexon/backup.env}"
+fi
+
 BACKUP_MODE="${BACKUP_MODE:-local}"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
+NAS_IP="${NAS_IP:-}"
+RSYNC_USER="${RSYNC_USER:-}"
+RSYNC_MODULE="${RSYNC_MODULE:-}"
+RSYNC_PASSWORD_FILE="${RSYNC_PASSWORD_FILE:-/data/rsync.secret}"
 SNAPSHOT_DIR="${SNAPSHOT_DIR:-plex-snapshots}"
 KEEP_COUNT="${SNAPSHOT_KEEP_COUNT:-4}"
 LOG_FILE="${BACKUP_LOG_PATH:-/data/logs/plex-backup.log}"
 
-# ── Setup ────────────────────────────────────────────────────────────────────
 mkdir -p "$(dirname "$LOG_FILE")"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "=== Plex Snapshot Cleanup - $(date) ===="
 
-if [ "$BACKUP_MODE" != "local" ]; then
-    echo "Snapshot cleanup runs locally only. For NAS cleanup, run from your NAS or host."
-    echo "Cleanup complete."
-    exit 0
+case "$KEEP_COUNT" in ''|*[!0-9]*) echo "Invalid SNAPSHOT_KEEP_COUNT: $KEEP_COUNT"; exit 1 ;; esac
+if [ "$KEEP_COUNT" -lt 1 ]; then
+    echo "SNAPSHOT_KEEP_COUNT must be at least 1"
+    exit 1
 fi
 
-SNAP_PATH="$BACKUP_DIR/$SNAPSHOT_DIR"
-
-if [ ! -d "$SNAP_PATH" ]; then
-    echo "Snapshot directory not found: $SNAP_PATH"
-    echo "Cleanup complete."
-    exit 0
+if [ "$BACKUP_MODE" = "nas" ]; then
+    AUTH=()
+    [ -z "$RSYNC_PASSWORD" ] && AUTH=(--password-file="$RSYNC_PASSWORD_FILE")
+    REMOTE="${RSYNC_USER}@${NAS_IP}::${RSYNC_MODULE}/${SNAPSHOT_DIR}/"
+    SNAPSHOTS=$(rsync --list-only "${AUTH[@]}" "$REMOTE" 2>/dev/null \
+        | awk '{print $NF}' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | sort)
+else
+    SNAP_PATH="$BACKUP_DIR/$SNAPSHOT_DIR"
+    if [ ! -d "$SNAP_PATH" ]; then
+        echo "Snapshot directory not found: $SNAP_PATH"
+        echo "Cleanup complete."
+        exit 0
+    fi
+    SNAPSHOTS=$(cd "$SNAP_PATH" && ls -1d ????-??-?? 2>/dev/null | sort)
 fi
 
-SNAPSHOTS=$(ls -1d "$SNAP_PATH"/????-??-??/ 2>/dev/null | sort)
 TOTAL=$(echo "$SNAPSHOTS" | grep -c .)
-
 if [ "$TOTAL" -le "$KEEP_COUNT" ]; then
     echo "Only $TOTAL snapshots found (keeping $KEEP_COUNT). Nothing to clean."
     echo "Cleanup complete."
@@ -47,9 +61,21 @@ fi
 DELETE_COUNT=$((TOTAL - KEEP_COUNT))
 echo "Found $TOTAL snapshots, keeping $KEEP_COUNT, deleting $DELETE_COUNT oldest"
 
-echo "$SNAPSHOTS" | head -n "$DELETE_COUNT" | while read -r SNAP_DIR; do
-    echo "Deleting: $SNAP_DIR"
-    rm -rf "$SNAP_DIR"
+FAILED=0
+EMPTY=$(mktemp -d)
+for SNAP in $(echo "$SNAPSHOTS" | head -n "$DELETE_COUNT"); do
+    echo "Deleting: $SNAP"
+    if [ "$BACKUP_MODE" = "nas" ]; then
+        # Sync an empty folder over just this one dated folder: rsync deletes it on the daemon.
+        rsync -r --delete "${AUTH[@]}" --include="/$SNAP/***" --exclude='*' "$EMPTY/" "$REMOTE" || FAILED=1
+    else
+        rm -rf "${SNAP_PATH:?}/$SNAP" || FAILED=1
+    fi
 done
+rmdir "$EMPTY"
 
+if [ "$FAILED" -ne 0 ]; then
+    echo "Cleanup finished with errors."
+    exit 1
+fi
 echo "Cleanup complete. Removed $DELETE_COUNT old snapshot(s)."

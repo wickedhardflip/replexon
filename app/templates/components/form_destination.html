@@ -1,0 +1,55 @@
+<form method="post" action="/settings/section/destination">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <input type="hidden" name="here" value="{{ here_url }}">
+
+    <label class="choice">
+        <input type="radio" name="dest_mode" value="local" {% if cfg.dest_mode != 'nas' %}checked{% endif %}>
+        <span><b>A folder</b><p>A local disk, or a NAS share already mounted on the host and mapped into the container (e.g. <code>/backups</code>).</p></span>
+    </label>
+    <div class="form-group" style="margin-left: 1.5rem;">
+        <label class="form-label" for="backup_dir">Backup folder</label>
+        <input type="text" id="backup_dir" name="backup_dir" class="form-input" style="max-width: 600px;" value="{{ cfg.backup_dir }}" placeholder="/backups">
+        <p class="help">Must exist, be writable, and not be inside the Plex folder.</p>
+    </div>
+
+    <label class="choice">
+        <input type="radio" name="dest_mode" value="nas" {% if cfg.dest_mode == 'nas' %}checked{% endif %}>
+        <span><b>A NAS over rsync</b><p>Sends straight to an rsync daemon (Synology, TrueNAS, Unraid). Nothing to mount.</p></span>
+    </label>
+    <div class="field-row" style="margin-left: 1.5rem;">
+        <div class="form-group">
+            <label class="form-label" for="nas_host">NAS address</label>
+            <input type="text" id="nas_host" name="nas_host" class="form-input" value="{{ cfg.nas_host }}" placeholder="192.168.1.50">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="rsync_user">rsync user</label>
+            <input type="text" id="rsync_user" name="rsync_user" class="form-input" value="{{ cfg.rsync_user }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="rsync_module">rsync module</label>
+            <input type="text" id="rsync_module" name="rsync_module" class="form-input" value="{{ cfg.rsync_module }}" placeholder="plex-backup">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="rsync_password">rsync password</label>
+            <input type="password" id="rsync_password" name="rsync_password" class="form-input" autocomplete="new-password"
+                   placeholder="{{ 'Saved - leave blank to keep' if rsync_password_set else 'Not set' }}">
+            {% if rsync_password_set %}
+            <label class="text-xs"><input type="checkbox" name="rsync_password_clear" value="1"> Remove saved password</label>
+            {% endif %}
+        </div>
+    </div>
+    <p class="help" style="margin-left: 1.5rem;">The password is stored encrypted and never shown again.</p>
+
+    <div class="sec">Weekly snapshots</div>
+    <div class="form-group">
+        <label class="form-label" for="snapshot_keep_count">Snapshots to keep</label>
+        <input type="number" id="snapshot_keep_count" name="snapshot_keep_count" class="form-input" style="max-width: 120px;"
+               min="1" max="52" value="{{ cfg.snapshot_keep_count }}">
+        <p class="help">Each Sunday the latest backup is frozen as a dated snapshot. Older ones are removed by the cleanup job.</p>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-sm">{{ submit_label | default('Save') }}</button>
+    </div>
+</form>

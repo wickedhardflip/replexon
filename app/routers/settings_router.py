@@ -1,7 +1,4 @@
-"""Settings routes: email config, paths, restore guide, about."""
-
-from pathlib import Path
-from typing import Dict, Optional
+"""Settings page (same forms as the setup wizard), test email, restore guide."""
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,86 +7,13 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
 from app.dependencies import get_current_user, get_db
-from app.models.setting import AppSetting
 from app.models.user import User
-
+from app.routers.setup import _back, form_context
+from app.services.app_settings import get_config
 from app.utils.security import generate_csrf_token, validate_csrf_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-
-# Default SMTP settings (Gmail as example)
-SMTP_DEFAULTS = {
-    "smtp_host": "",
-    "smtp_port": "587",
-    "smtp_from": "",
-    "smtp_tls": "on",
-    "email_recipient": "",
-}
-
-
-def _get_setting(db: DBSession, key: str, default: str = "") -> str:
-    row = db.query(AppSetting).filter(AppSetting.key == key).first()
-    return row.value if row else default
-
-
-def _set_setting(db: DBSession, key: str, value: str) -> None:
-    row = db.query(AppSetting).filter(AppSetting.key == key).first()
-    if row:
-        row.value = value
-    else:
-        row = AppSetting(key=key, value=value)
-        db.add(row)
-    db.commit()
-
-
-def _try_read_msmtp() -> Dict[str, str]:
-    """Try to read msmtp config as fallback defaults for first-time setup.
-
-    This provides a nice experience on servers that already have msmtp
-    configured -- the SMTP fields pre-populate with existing values.
-    Returns empty dict if msmtp is not installed or not readable.
-    """
-    config = {}
-    for msmtp_path in [Path.home() / ".msmtprc", Path("/etc/msmtprc")]:
-        if msmtp_path.exists():
-            try:
-                for line in msmtp_path.read_text().splitlines():
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    parts = line.split(None, 1)
-                    if len(parts) == 2:
-                        key, value = parts
-                        if key.lower() in ("password", "passwordeval"):
-                            continue
-                        config[key.lower()] = value
-            except PermissionError:
-                pass
-            break
-    return config
-
-
-def _get_smtp_settings(db: DBSession) -> Dict[str, str]:
-    """Get SMTP settings from app_settings, falling back to msmtp config."""
-    result = {}
-    for key, default in SMTP_DEFAULTS.items():
-        result[key] = _get_setting(db, key, "")
-    # If nothing configured yet, try msmtp as initial defaults
-    if not result["smtp_host"]:
-        msmtp = _try_read_msmtp()
-        if msmtp:
-            result.setdefault("smtp_host", msmtp.get("host", ""))
-            result.setdefault("smtp_port", msmtp.get("port", "587"))
-            result.setdefault("smtp_from", msmtp.get("from", ""))
-            result.setdefault("smtp_tls", msmtp.get("tls", "on"))
-            if not result["email_recipient"]:
-                result["email_recipient"] = msmtp.get("from", "")
-            # Fill in any that were still blank
-            for key in ("smtp_host", "smtp_port", "smtp_from", "smtp_tls"):
-                if not result[key]:
-                    result[key] = msmtp.get(key.replace("smtp_", ""), SMTP_DEFAULTS[key])
-    return result
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -98,114 +22,38 @@ async def settings_page(
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
-    """Settings page."""
-    smtp = _get_smtp_settings(db)
-    backup_destination = _get_setting(db, "backup_destination", settings.backup_destination)
-    plex_data_path = _get_setting(db, "plex_data_path", settings.plex_data_path)
-
     from app.services.email_service import get_recent_email_logs
-    email_logs = get_recent_email_logs(db, limit=5)
 
-    return templates.TemplateResponse(
-        "pages/settings.html",
-        {
-            "request": request,
-            "user": user,
-            "active_page": "settings",
-            "email_recipient": smtp["email_recipient"],
-            "smtp_host": smtp["smtp_host"],
-            "smtp_port": smtp["smtp_port"],
-            "smtp_from": smtp["smtp_from"],
-            "smtp_tls": smtp["smtp_tls"],
-            "backup_log_path": settings.backup_log_path,
-            "backup_script_path": settings.backup_script_path,
-            "backup_destination": backup_destination,
-            "plex_data_path": plex_data_path,
-            "cron_edit_enabled": settings.cron_edit_enabled,
-            "csrf_token": generate_csrf_token(),
-            "email_logs": email_logs,
-        },
-    )
-
-
-@router.post("/settings/email")
-async def update_email_settings(
-    request: Request,
-    email_recipient: str = Form(""),
-    csrf_token: str = Form(...),
-    user: User = Depends(get_current_user),
-    db: DBSession = Depends(get_db),
-):
-    """Update email notification recipient."""
-    if not validate_csrf_token(csrf_token):
-        return RedirectResponse(url="/settings", status_code=303)
-
-    _set_setting(db, "email_recipient", email_recipient.strip())
-    return RedirectResponse(url="/settings?success=Email+settings+updated", status_code=303)
-
-
-@router.post("/settings/smtp")
-async def update_smtp_settings(
-    request: Request,
-    smtp_host: str = Form(...),
-    smtp_port: str = Form("587"),
-    smtp_from: str = Form(...),
-    smtp_tls: str = Form("off"),
-    csrf_token: str = Form(...),
-    user: User = Depends(get_current_user),
-    db: DBSession = Depends(get_db),
-):
-    """Update SMTP server settings (stored in app database)."""
-    if not validate_csrf_token(csrf_token):
-        return RedirectResponse(url="/settings", status_code=303)
-
-    if not smtp_host.strip():
-        return RedirectResponse(url="/settings?error=SMTP+host+is+required", status_code=303)
-    if not smtp_from.strip() or "@" not in smtp_from:
-        return RedirectResponse(url="/settings?error=Valid+from+address+is+required", status_code=303)
-
-    _set_setting(db, "smtp_host", smtp_host.strip())
-    _set_setting(db, "smtp_port", smtp_port.strip())
-    _set_setting(db, "smtp_from", smtp_from.strip())
-    _set_setting(db, "smtp_tls", smtp_tls.strip())
-    return RedirectResponse(url="/settings?success=SMTP+settings+updated", status_code=303)
-
-
-@router.post("/settings/backup-info")
-async def update_backup_info(
-    request: Request,
-    backup_destination: str = Form(""),
-    plex_data_path: str = Form(""),
-    csrf_token: str = Form(...),
-    user: User = Depends(get_current_user),
-    db: DBSession = Depends(get_db),
-):
-    """Update backup destination and Plex data path."""
-    if not validate_csrf_token(csrf_token):
-        return RedirectResponse(url="/settings", status_code=303)
-
-    _set_setting(db, "backup_destination", backup_destination.strip())
-    _set_setting(db, "plex_data_path", plex_data_path.strip())
-    return RedirectResponse(url="/settings?success=Backup+info+updated", status_code=303)
+    ctx = form_context(db)
+    ctx.update({
+        "request": request,
+        "user": user,
+        "active_page": "settings",
+        "next_url": "/settings",
+        "here_url": "/settings",
+        "backup_log_path": settings.backup_log_path,
+        "backup_script_path": settings.backup_script_path,
+        "email_logs": get_recent_email_logs(db, limit=5),
+    })
+    return templates.TemplateResponse(request, "pages/settings.html", ctx)
 
 
 @router.post("/settings/test-email")
 async def test_email(
     request: Request,
     csrf_token: str = Form(...),
+    next: str = Form("/settings"),
+    here: str = Form(""),
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
-    """Send a test email to verify configuration."""
+    """Send a test email with the saved settings."""
+    next = here or next  # come back to the form the button was on
     if not validate_csrf_token(csrf_token):
-        return RedirectResponse(url="/settings", status_code=303)
-
+        return _back(next, error="Form expired, please try again")
     from app.services.email_service import send_test_email
     success, message = send_test_email(db)
-
-    if success:
-        return RedirectResponse(url="/settings?success=" + message.replace(" ", "+"), status_code=303)
-    return RedirectResponse(url="/settings?error=" + message.replace(" ", "+"), status_code=303)
+    return _back(next, success=message) if success else _back(next, error=message)
 
 
 @router.get("/restore", response_class=HTMLResponse)
@@ -215,21 +63,21 @@ async def restore_page(
     db: DBSession = Depends(get_db),
 ):
     """Restore guide page."""
-    backup_destination = _get_setting(db, "backup_destination", settings.backup_destination)
-    plex_data_path = _get_setting(db, "plex_data_path", settings.plex_data_path)
-
-    rsync_dest = backup_destination or "user@NAS_IP::module"
-    if "://" in rsync_dest:
-        rsync_dest = rsync_dest.split("://", 1)[1]
+    cfg = get_config(db)
+    if cfg["dest_mode"] == "nas":
+        rsync_dest = f"{cfg['rsync_user']}@{cfg['nas_host']}::{cfg['rsync_module']}"
+    else:
+        rsync_dest = cfg["backup_dir"]
 
     return templates.TemplateResponse(
-        "pages/restore.html",
+        request, "pages/restore.html",
         {
             "request": request,
             "user": user,
             "active_page": "restore",
             "rsync_dest": rsync_dest,
-            "plex_data_path": plex_data_path,
+            "dest_mode": cfg["dest_mode"],
+            "plex_data_path": cfg["plex_data_path"],
             "rsync_password_file": settings.rsync_password_file,
             "snapshot_dir": settings.snapshot_dir,
             "csrf_token": generate_csrf_token(),

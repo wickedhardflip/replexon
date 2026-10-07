@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.title="RePlexOn" \
 # rsync/sqlite3/bc: backup script. curl: optional "pause Plex" mode (docker.sock API).
 # gosu: drop from root to PUID/PGID in the entrypoint.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        rsync sqlite3 bc curl iputils-ping tini gosu \
+        rsync sqlite3 bc curl iputils-ping tini gosu tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

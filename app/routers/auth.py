@@ -40,7 +40,7 @@ async def login_page(request: Request, db: DBSession = Depends(get_db)):
     if proxy_user(request, db):
         return RedirectResponse(url="/dashboard", status_code=303)
     return templates.TemplateResponse(
-        "pages/login.html",
+        request, "pages/login.html",
         {"request": request, "csrf_token": generate_csrf_token()},
     )
 
@@ -60,7 +60,7 @@ async def login(
 
     if _is_rate_limited(client_ip):
         return templates.TemplateResponse(
-            "pages/login.html",
+            request, "pages/login.html",
             {
                 "request": request,
                 "error": "Too many login attempts. Please wait a minute.",
@@ -71,7 +71,7 @@ async def login(
 
     if not validate_csrf_token(csrf_token):
         return templates.TemplateResponse(
-            "pages/login.html",
+            request, "pages/login.html",
             {
                 "request": request,
                 "error": "Invalid form submission. Please try again.",
@@ -83,7 +83,7 @@ async def login(
     user = authenticate_user(db, username, password)
     if not user:
         return templates.TemplateResponse(
-            "pages/login.html",
+            request, "pages/login.html",
             {
                 "request": request,
                 "error": "Invalid username or password.",

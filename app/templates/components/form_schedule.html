@@ -1,0 +1,44 @@
+<form method="post" action="/settings/section/schedule">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <input type="hidden" name="here" value="{{ here_url }}">
+
+    <div class="sec">Backup</div>
+    {% for key, preset in backup_presets.items() %}
+    <label class="choice">
+        <input type="radio" name="backup_preset" value="{{ key }}" {% if backup_preset == key %}checked{% endif %}>
+        <span><b>{{ preset[0] }}</b><p class="font-mono">{{ preset[1] }}</p></span>
+    </label>
+    {% endfor %}
+    <label class="choice">
+        <input type="radio" name="backup_preset" value="custom" {% if backup_preset == 'custom' %}checked{% endif %}>
+        <span><b>Custom cron</b><p>Five fields: minute hour day month weekday.</p></span>
+    </label>
+    <div class="form-group" style="margin-left: 1.5rem;">
+        <input type="text" name="backup_cron" class="form-input font-mono settings-input" value="{{ backup_cron }}" aria-label="Custom backup cron">
+    </div>
+
+    <div class="sec">Snapshot cleanup</div>
+    {% for key, preset in cleanup_presets.items() %}
+    <label class="choice">
+        <input type="radio" name="cleanup_preset" value="{{ key }}" {% if cleanup_preset == key %}checked{% endif %}>
+        <span><b>{{ preset[0] }}</b><p class="font-mono">{{ preset[1] }}</p></span>
+    </label>
+    {% endfor %}
+    <label class="choice">
+        <input type="radio" name="cleanup_preset" value="custom" {% if cleanup_preset == 'custom' %}checked{% endif %}>
+        <span><b>Custom cron</b></span>
+    </label>
+    <div class="form-group" style="margin-left: 1.5rem;">
+        <input type="text" name="cleanup_cron" class="form-input font-mono settings-input" value="{{ cleanup_cron }}" aria-label="Custom cleanup cron">
+    </div>
+
+    <label class="text-sm" style="display: block; margin: 0.5rem 0;">
+        <input type="checkbox" name="backup_enabled" value="on" {% if backup_enabled %}checked{% endif %}> Scheduled runs enabled
+    </label>
+    <p class="help">Times are in {{ tz }}. Set <code>TZ</code> in compose.yml to change it.</p>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-sm">{{ submit_label | default('Save') }}</button>
+    </div>
+</form>

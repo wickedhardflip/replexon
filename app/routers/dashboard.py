@@ -13,7 +13,7 @@ from app.models.setting import AppSetting
 from app.utils.security import generate_csrf_token
 from app.models.user import User
 from app.services.backup_runner import can_trigger_backup
-from app.services.cron_service import get_next_backup_time
+from app.services.scheduler_service import get_next_backup_time
 from app.services.metrics import (
     get_backup_type_counts,
     get_calendar_data,
@@ -43,7 +43,7 @@ async def dashboard(
     daily_durations = get_daily_durations(db, days=days)
     calendar_data = get_calendar_data(db, months=4)
     recent = get_recent_backups(db, limit=10)
-    next_backup = get_next_backup_time()
+    next_backup = get_next_backup_time(db)
     nas_status = get_nas_status(db)
     failure_clusters = get_failure_clusters(db, days=days)
 
@@ -56,7 +56,7 @@ async def dashboard(
     can_backup, _ = can_trigger_backup()
 
     return templates.TemplateResponse(
-        "pages/dashboard.html",
+        request, "pages/dashboard.html",
         {
             "request": request,
             "user": user,

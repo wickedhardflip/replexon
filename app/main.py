@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("replexon")
 
 BANNER = r"""
@@ -67,7 +68,7 @@ async def _poll_nas_health():
 
 
 async def _poll_snapshots():
-    """Background task: enumerate NAS snapshots every hour."""
+    """Background task: enumerate snapshots every hour."""
     from app.services.snapshot_service import fetch_snapshots
 
     while True:
@@ -84,13 +85,61 @@ async def _poll_snapshots():
             logger.exception("Error in snapshot poll task")
 
 
+async def _run_scheduler():
+    """Background task: start scheduled jobs when due (checked every 60 seconds)."""
+    from app.services.scheduler_service import check_and_run_due_jobs
+
+    while True:
+        try:
+            await asyncio.sleep(60)
+            db = SessionLocal()
+            try:
+                check_and_run_due_jobs(db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Error in scheduler task")
+
+
+def _startup_db_tasks(db) -> None:
+    """Optional env admin, default schedules, and runs a restart interrupted."""
+    from datetime import datetime, timezone
+    from app.models.backup import BackupRun
+    from app.models.user import User
+    from app.services.scheduler_service import initialize_schedules
+
+    if settings.admin_user and settings.admin_password and db.query(User).first() is None:
+        from app.services.auth_service import hash_password
+        db.add(User(username=settings.admin_user, password_hash=hash_password(settings.admin_password)))
+        db.commit()
+        logger.info("Created admin user from ADMIN_USER")
+
+    initialize_schedules(db)
+
+    stale = db.query(BackupRun).filter(BackupRun.status == "running").all()
+    for run in stale:
+        run.status = "failure"
+        run.error_message = "Interrupted: RePlexOn restarted while this was running"
+        run.finished_at = datetime.now(timezone.utc)
+    if stale:
+        db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
     print(BANNER)
 
-    Path("data").mkdir(exist_ok=True)
+    Path(settings.data_dir, "logs").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        _startup_db_tasks(db)
+    finally:
+        db.close()
 
     # Initial log parse on startup
     try:
@@ -120,15 +169,19 @@ async def lifespan(app: FastAPI):
     poll_task = asyncio.create_task(_poll_logs())
     nas_task = asyncio.create_task(_poll_nas_health())
     snap_task = asyncio.create_task(_poll_snapshots())
+    sched_task = asyncio.create_task(_run_scheduler())
 
     yield
 
-    for task in (poll_task, nas_task, snap_task):
+    for task in (poll_task, nas_task, snap_task, sched_task):
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+
+
+SETUP_EXEMPT = ("/setup", "/static", "/health", "/login", "/logout", "/api/")
 
 
 def create_app() -> FastAPI:
@@ -151,8 +204,26 @@ def create_app() -> FastAPI:
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         return response
 
-    from app.routers import auth, dashboard, logs, schedules, settings_router
+    @app.middleware("http")
+    async def first_run_redirect(request: Request, call_next):
+        """Send people to the setup wizard until it has been finished."""
+        path = request.url.path
+        if request.method == "GET" and not path.startswith(SETUP_EXEMPT):
+            from app.models.user import User
+            from app.services.app_settings import get_setting
+            db = SessionLocal()
+            try:
+                if db.query(User).first() is None:
+                    return RedirectResponse(url="/setup", status_code=303)
+                if not get_setting(db, "setup_complete") and request.cookies.get("session_token"):
+                    return RedirectResponse(url="/setup?step=plex", status_code=303)
+            finally:
+                db.close()
+        return await call_next(request)
 
+    from app.routers import auth, dashboard, logs, schedules, settings_router, setup
+
+    app.include_router(setup.router)
     app.include_router(auth.router)
     app.include_router(dashboard.router)
     app.include_router(logs.router)
@@ -167,7 +238,7 @@ def create_app() -> FastAPI:
     async def not_found(request: Request, exc):
         templates = Jinja2Templates(directory="app/templates")
         return templates.TemplateResponse(
-            "pages/error.html",
+            request, "pages/error.html",
             {"request": request, "status_code": 404, "message": "Page not found"},
             status_code=404,
         )

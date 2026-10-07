@@ -7,105 +7,44 @@
 </div>
 
 {% if request.query_params.get('error') %}
-<div class="alert alert-error">{{ request.query_params.get('error') }}</div>
+<div class="alert alert-error" role="alert">{{ request.query_params.get('error') }}</div>
 {% endif %}
-
 {% if request.query_params.get('success') %}
 <div class="alert alert-success">{{ request.query_params.get('success') }}</div>
 {% endif %}
 
-<!-- Backup Paths -->
 <div class="settings-section">
-    <h3>Backup Paths</h3>
-    <form method="post" action="/settings/backup-info">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="form-group">
-            <label class="form-label" for="plex_data_path">Plex Data Path (Source)</label>
-            <input type="text" id="plex_data_path" name="plex_data_path" class="form-input" style="max-width: 600px;"
-                   value="{{ plex_data_path }}" placeholder="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server">
-        </div>
-        <div class="form-group">
-            <label class="form-label" for="backup_destination">Backup Destination</label>
-            <input type="text" id="backup_destination" name="backup_destination" class="form-input" style="max-width: 600px;"
-                   value="{{ backup_destination }}" placeholder="rsync://user@192.168.1.100/module/plex">
-        </div>
-        <button type="submit" class="btn btn-blue btn-sm">Save Backup Paths</button>
-    </form>
-    <p class="text-xs text-muted" style="margin-top: 0.75rem;">Where Plex data lives and where backups go. Shown on the dashboard.</p>
+    <h3>Plex location</h3>
+    {% include "components/form_plex.html" %}
 </div>
 
-<!-- Email Settings -->
 <div class="settings-section">
-    <h3>Email Notifications</h3>
-    <form method="post" action="/settings/email">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="form-group">
-            <label class="form-label" for="email_recipient">Notification Recipient</label>
-            <input type="email" id="email_recipient" name="email_recipient" class="form-input settings-input"
-                   value="{{ email_recipient }}" placeholder="you@example.com">
-        </div>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button type="submit" class="btn btn-blue btn-sm">Save Email Settings</button>
-        </div>
-    </form>
-    <form method="post" action="/settings/test-email" style="margin-top: 0.75rem;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-secondary btn-sm">Send Test Email</button>
-    </form>
+    <h3>What to back up</h3>
+    {% include "components/form_items.html" %}
 </div>
 
-<!-- SMTP Configuration -->
 <div class="settings-section">
-    <h3>SMTP Server</h3>
-    <form method="post" action="/settings/smtp">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; max-width: 500px;">
-            <div class="form-group">
-                <label class="form-label" for="smtp_host">SMTP Host</label>
-                <input type="text" id="smtp_host" name="smtp_host" class="form-input"
-                       value="{{ smtp_host }}" placeholder="smtp.gmail.com">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="smtp_port">Port</label>
-                <input type="text" id="smtp_port" name="smtp_port" class="form-input"
-                       value="{{ smtp_port }}" placeholder="587">
-            </div>
-        </div>
-        <div class="form-group">
-            <label class="form-label" for="smtp_from">From Address</label>
-            <input type="email" id="smtp_from" name="smtp_from" class="form-input settings-input"
-                   value="{{ smtp_from }}" placeholder="you@gmail.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">TLS Encryption</label>
-            <div style="display: flex; gap: 1.5rem; padding: 0.375rem 0;">
-                <label style="display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--text-primary); cursor: pointer;">
-                    <input type="radio" name="smtp_tls" value="on" {% if smtp_tls == 'on' %}checked{% endif %}> Enabled
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--text-primary); cursor: pointer;">
-                    <input type="radio" name="smtp_tls" value="off" {% if smtp_tls != 'on' %}checked{% endif %}> Disabled
-                </label>
-            </div>
-        </div>
-        <button type="submit" class="btn btn-blue btn-sm">Save SMTP Settings</button>
-    </form>
-    <p class="text-xs text-muted" style="margin-top: 0.75rem;">SMTP settings are used by RePlexOn for sending notifications. If msmtp is installed, settings are auto-detected on first setup.</p>
+    <h3>Where backups go</h3>
+    {% include "components/form_destination.html" %}
 </div>
 
-<!-- Email Delivery Log -->
+<div class="settings-section">
+    <h3>Schedule</h3>
+    {% include "components/form_schedule.html" %}
+</div>
+
+<div class="settings-section">
+    <h3>Email notifications</h3>
+    {% include "components/form_email.html" %}
+</div>
+
 {% if email_logs %}
 <div class="settings-section">
-    <h3>Email Delivery Log</h3>
+    <h3>Email delivery log</h3>
     <div class="table-container">
         <table>
             <thead>
-                <tr>
-                    <th>Sent</th>
-                    <th>Recipient</th>
-                    <th>Subject</th>
-                    <th>Method</th>
-                    <th>Status</th>
-                </tr>
+                <tr><th>Sent</th><th>Recipient</th><th>Subject</th><th>Status</th></tr>
             </thead>
             <tbody>
                 {% for log in email_logs %}
@@ -113,7 +52,6 @@
                     <td>{{ log.sent_at.strftime('%b %d, %I:%M %p') }}</td>
                     <td class="font-mono text-xs">{{ log.recipient }}</td>
                     <td>{{ log.subject }}</td>
-                    <td><span class="badge badge-daily_mirror">{{ log.method }}</span></td>
                     <td>
                         {% if log.success %}
                         <span class="badge badge-success">OK</span>
@@ -129,41 +67,28 @@
 </div>
 {% endif %}
 
-<!-- Server Paths -->
 <div class="settings-section">
-    <h3>Server Configuration</h3>
+    <h3>Server</h3>
     <div class="settings-grid">
         <div class="settings-row">
-            <span class="settings-label">Backup Log</span>
+            <span class="settings-label">Backup log</span>
             <span class="settings-value font-mono">{{ backup_log_path }}</span>
         </div>
         <div class="settings-row">
-            <span class="settings-label">Backup Script</span>
+            <span class="settings-label">Backup script</span>
             <span class="settings-value font-mono">{{ backup_script_path }}</span>
         </div>
-        <div class="settings-row">
-            <span class="settings-label">Cron Editing</span>
-            <span class="settings-value">
-                {% if cron_edit_enabled %}
-                <span class="badge badge-success">Enabled</span>
-                {% else %}
-                <span class="badge badge-failure">Disabled</span>
-                {% endif %}
-            </span>
-        </div>
     </div>
-    <p class="text-xs text-muted" style="margin-top: 0.75rem;">These paths are configured in the <code>.env</code> file on the server.</p>
+    <p class="text-xs text-muted" style="margin-top: 0.75rem;">Paths come from environment variables (see <code>.env.example</code>). Everything else lives on this page.</p>
 </div>
 
-<!-- About -->
 <div class="settings-section">
     <h3>About RePlexOn</h3>
     <p class="text-sm" style="color: var(--text-secondary); margin-bottom: 0.5rem;">
-        <span class="text-orange">Re</span><span class="text-blue">Plex</span><span class="text-orange">On</span> &mdash;
-        <em>"Previously on your Plex server..."</em>
+        RePlexOn &mdash; <em>"Previously on your Plex server..."</em>
     </p>
-    <p class="text-xs text-muted">Plex backup monitoring dashboard. Built with FastAPI + HTMX + Chart.js.</p>
-    <p class="text-xs text-muted mt-1">Port: 9847 &middot; <a href="https://github.com/wickedhardflip/replexon" target="_blank">GitHub</a> &middot; <a href="https://x.com/punchybuttons" target="_blank">@punchybuttons</a> &middot; <a href="/restore">Restore Guide</a></p>
-    <p class="text-xs mt-1"><a href="https://ko-fi.com/punchybuttons" target="_blank" style="color: #FF5E5B;">&hearts; Support on Ko-fi</a></p>
+    <p class="text-xs text-muted">Plex backup and monitoring. Built with FastAPI + HTMX + Chart.js.</p>
+    <p class="text-xs text-muted mt-1"><a href="https://github.com/wickedhardflip/replexon" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://x.com/punchybuttons" target="_blank" rel="noopener">@punchybuttons</a> &middot; <a href="/restore">Restore Guide</a></p>
+    <p class="text-xs mt-1"><a href="https://ko-fi.com/punchybuttons" target="_blank" rel="noopener">&hearts; Support on Ko-fi</a></p>
 </div>
 {% endblock %}

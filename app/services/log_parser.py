@@ -13,7 +13,7 @@ Strategy:
 
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -88,12 +88,13 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
         is_sunday = started_at.weekday() == 6
         backup_type = "daily_mirror"
 
-        # Skip if already exists
+        # Skip dates that already have a run (imported earlier, or launched by RePlexOn itself)
         existing = (
             db.query(BackupRun)
             .filter(
-                BackupRun.started_at == started_at,
-                BackupRun.backup_type == backup_type,
+                BackupRun.started_at >= backup_date,
+                BackupRun.started_at < backup_date + timedelta(days=1),
+                BackupRun.backup_type.in_(("daily_mirror", "manual")),
             )
             .first()
         )
@@ -160,9 +161,9 @@ def extract_stats_file(log_path: str) -> Optional[str]:
     15GB+ log file. The result is cached in the app's data directory.
     Returns the path to the extract file, or None on failure.
     """
-    from app.config import BASE_DIR
-    data_dir = BASE_DIR / "data"
-    data_dir.mkdir(exist_ok=True)
+    from app.config import settings
+    data_dir = Path(settings.data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
     extract_path = str(data_dir / "plex-backup-stats.txt")
 
     # Use grep with fixed strings piped through grep -E for speed.
@@ -184,21 +185,8 @@ def extract_stats_file(log_path: str) -> Optional[str]:
         return None
 
 
-def enrich_from_stats(db: DBSession, stats_path: str) -> int:
-    """Read an extracted stats file and enrich backup records.
-
-    The stats file contains just the marker lines from the main log,
-    produced by extract_stats_file() or the import-logs CLI command.
-    """
-    path = Path(stats_path)
-    if not path.exists():
-        return 0
-
-    text = path.read_text()
-    if not text.strip():
-        return 0
-
-    # Parse all backup entries from the extracted lines
+def parse_marker_lines(text: str) -> List[Dict]:
+    """Backup entries (start, end, status, sent, total_size, db_safe) from log marker lines."""
     entries = []  # type: List[Dict]
     current = {}  # type: Dict
 
@@ -237,6 +225,24 @@ def enrich_from_stats(db: DBSession, stats_path: str) -> int:
             current["status"] = "failure"
             entries.append(current)
             current = {}
+    return entries
+
+
+def enrich_from_stats(db: DBSession, stats_path: str) -> int:
+    """Read an extracted stats file and enrich backup records.
+
+    The stats file contains just the marker lines from the main log,
+    produced by extract_stats_file() or the import-logs CLI command.
+    """
+    path = Path(stats_path)
+    if not path.exists():
+        return 0
+
+    text = path.read_text()
+    if not text.strip():
+        return 0
+
+    entries = parse_marker_lines(text)
 
     # Now enrich database records with the extracted data
     updated = 0
@@ -294,8 +300,8 @@ def parse_full_log(db: DBSession, log_path: str) -> int:
     count = import_from_tracking_file(db, tracking_path)
 
     # Try enrichment from the stats extract file
-    from app.config import BASE_DIR
-    stats_path = str(BASE_DIR / "data" / "plex-backup-stats.txt")
+    from app.config import settings
+    stats_path = str(Path(settings.data_dir) / "plex-backup-stats.txt")
     enrich_from_stats(db, stats_path)
     return count
 

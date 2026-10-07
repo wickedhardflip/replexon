@@ -1,0 +1,64 @@
+<form method="post" action="/settings/section/email">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <input type="hidden" name="here" value="{{ here_url }}">
+
+    <div class="field-row">
+        <div class="form-group">
+            <label class="form-label" for="smtp_host">SMTP host</label>
+            <input type="text" id="smtp_host" name="smtp_host" class="form-input" value="{{ cfg.smtp_host }}" placeholder="smtp.gmail.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="smtp_port">Port</label>
+            <input type="text" id="smtp_port" name="smtp_port" class="form-input" value="{{ cfg.smtp_port }}" placeholder="587">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="smtp_tls">Encryption</label>
+            <select id="smtp_tls" name="smtp_tls" class="form-select form-input">
+                <option value="starttls" {% if cfg.smtp_tls == 'starttls' %}selected{% endif %}>STARTTLS (port 587)</option>
+                <option value="ssl" {% if cfg.smtp_tls == 'ssl' %}selected{% endif %}>SSL/TLS (port 465)</option>
+                <option value="none" {% if cfg.smtp_tls == 'none' %}selected{% endif %}>None</option>
+            </select>
+        </div>
+    </div>
+    <div class="field-row">
+        <div class="form-group">
+            <label class="form-label" for="smtp_user">Username</label>
+            <input type="text" id="smtp_user" name="smtp_user" class="form-input" value="{{ cfg.smtp_user }}" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="smtp_password">Password</label>
+            <input type="password" id="smtp_password" name="smtp_password" class="form-input" autocomplete="new-password"
+                   placeholder="{{ 'Saved - leave blank to keep' if smtp_password_set else 'Not set' }}">
+            {% if smtp_password_set %}
+            <label class="text-xs"><input type="checkbox" name="smtp_password_clear" value="1"> Remove saved password</label>
+            {% endif %}
+        </div>
+    </div>
+    <div class="field-row">
+        <div class="form-group">
+            <label class="form-label" for="smtp_from">From address</label>
+            <input type="email" id="smtp_from" name="smtp_from" class="form-input" value="{{ cfg.smtp_from }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="email_recipient">Send notifications to</label>
+            <input type="email" id="email_recipient" name="email_recipient" class="form-input" value="{{ cfg.email_recipient }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="notify_on">Email me</label>
+            <select id="notify_on" name="notify_on" class="form-select form-input">
+                <option value="failure" {% if cfg.notify_on == 'failure' %}selected{% endif %}>When a backup fails</option>
+                <option value="both" {% if cfg.notify_on == 'both' %}selected{% endif %}>After every backup</option>
+                <option value="success" {% if cfg.notify_on == 'success' %}selected{% endif %}>Only on success</option>
+                <option value="never" {% if cfg.notify_on == 'never' %}selected{% endif %}>Never</option>
+            </select>
+        </div>
+    </div>
+    <p class="help">The password is stored encrypted and never shown again. Gmail needs an app password.</p>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-sm">{{ submit_label | default('Save') }}</button>
+        <button type="submit" class="btn btn-secondary btn-sm" formaction="/settings/test-email" formnovalidate
+                title="Sends with the saved settings; save first">Send test email</button>
+    </div>
+</form>

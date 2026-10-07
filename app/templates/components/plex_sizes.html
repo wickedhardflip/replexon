@@ -1,0 +1,5 @@
+<div class="chips">
+    {% for key, label in labels.items() %}
+    <span class="chip" title="{{ label }}">{{ key }}: {{ sizes.get(key, '-') }}</span>
+    {% endfor %}
+</div>
