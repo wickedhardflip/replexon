@@ -29,6 +29,7 @@ ENV DATA_DIR=/data \
     BACKUP_SCRIPT_PATH=/app/scripts/backup-plex.sh \
     PLEX_DATA_PATH=/plex \
     BACKUP_DIR=/backups \
+    RSYNC_PASSWORD_FILE=/data/rsync.secret \
     PUID=1000 \
     PGID=1000 \
     PYTHONUNBUFFERED=1
