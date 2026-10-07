@@ -42,7 +42,7 @@ those files mid-write can produce a backup that will not open.
 | Variable | Default | Purpose |
 |---|---|---|
 | `TZ` | `UTC` | Time zone for schedules and log times. |
-| `PUID` / `PGID` | `1000` | Docker only. User and group RePlexOn runs as. Match your Plex container so the Plex folder is readable. |
+| `PUID` / `PGID` | `1000` | Docker only. User and group RePlexOn runs as. Match your Plex container so the Plex folder is readable. Plex installed as a snap or package has root-only files (`Preferences.xml`); use `PUID=0` and `PGID=0` there and RePlexOn stays root inside the container. |
 | `SECRET_KEY` | generated | Signs sessions and encrypts stored passwords. When unset it is generated once into `DATA_DIR/.secret_key` (mode 600). If you lose that file you must re-enter the SMTP and rsync passwords. |
 | `DATA_DIR` | `/data` | Database, logs, secret key. |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | empty | Create the admin on first start instead of in the wizard (only when no user exists yet). |

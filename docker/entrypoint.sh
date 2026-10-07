@@ -6,7 +6,8 @@ set -e
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 
-if [ "$(id -u)" = "0" ]; then
+# PUID=0 means "stay root" (needed when the Plex folder has root-only files): nothing to drop to.
+if [ "$(id -u)" = "0" ] && [ "$PUID" != "0" ]; then
     getent group replexon >/dev/null || groupadd -o -g "$PGID" replexon
     id replexon >/dev/null 2>&1 || useradd -o -u "$PUID" -g "$PGID" -d /app -s /bin/bash replexon
     # docker.sock (only for the optional "pause Plex" mode): join its group so curl can reach it.
