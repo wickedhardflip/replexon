@@ -65,7 +65,13 @@ def _broadcast():
         if isinstance(result, str):
             click.echo(f"[ERROR] {result}")
             sys.exit(1)
-        click.echo(f"[ON AIR] Backup #{result.id} started. Check the dashboard for progress.")
+        click.echo(f"[ON AIR] Backup #{result.id} started; waiting for it to finish...")
+        from app.services import backup_runner
+        backup_runner._running_process.wait()  # this process owns the job, so record its result here
+        backup_runner.check_running_backup(db)
+        db.refresh(result)
+        click.echo(f"[{result.status.upper()}] Backup #{result.id}")
+        sys.exit(0 if result.status == "success" else 1)
     finally:
         db.close()
 
