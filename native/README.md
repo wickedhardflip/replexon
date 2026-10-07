@@ -1,134 +1,104 @@
-# Backup Scripts
+# RePlexOn on bare metal (no Docker)
 
-Template backup scripts for Plex Media Server, designed for rsync to a NAS/Synology.
+Docker is the recommended way to run RePlexOn (see the main [README](../README.md)).
+This folder is for running it directly on an Ubuntu or Debian host with systemd,
+next to a native Plex install.
 
-## Scripts
-
-| Script | Schedule | Purpose |
-|---|---|---|
-| `backup-plex.sh` | Daily 3 AM | Mirror Plex data to NAS + Sunday snapshots |
-| `cleanup-plex-snapshots.sh` | Sunday 4 AM | Remove old weekly snapshots beyond retention count |
-| `backup-scripts.sh` | 1st of month 5 AM | Back up all scripts and configs to NAS |
-
-## Setup
-
-### 1. Create rsync credential file
+## Install
 
 ```bash
-sudo mkdir -p /etc/replexon
-sudo cp rsync.secret.example /etc/replexon/rsync.secret
-sudo nano /etc/replexon/rsync.secret   # Replace with your actual rsync password
-sudo chmod 600 /etc/replexon/rsync.secret
+git clone https://github.com/wickedhardflip/replexon.git
+cd replexon
+sudo bash native/install.sh
 ```
 
-### 2. Edit script variables
+The installer:
 
-Open each script and configure the variables at the top:
+- installs `python3-venv rsync sqlite3 bc curl` (Python 3.10 or newer is required)
+- copies the app to `/opt/replexon` and builds a virtualenv there
+- writes `/opt/replexon/.env` with paths only (data in `/opt/replexon/data`)
+- runs the app as the `plex` user when it exists (so it can read the Plex folder),
+  otherwise as `www-data`
+- installs and starts `replexon.service` and a logrotate rule
 
-- **`PLEX_DATA`** -- Path to your Plex data directory (default: snap install path)
-- **`NAS_IP`** -- Your NAS/Synology IP address
-- **`RSYNC_USER`** / **`RSYNC_MODULE`** -- rsync daemon credentials on your NAS
-- **`RSYNC_PASSWORD_FILE`** -- Path to the credential file (default: `/etc/replexon/rsync.secret`)
+Then open `http://<server>:9847` and the setup wizard walks you through Plex location,
+what to back up, destination, schedule and email. The app runs the backups on its
+own schedule; there is nothing to add to crontab.
 
-### 3. Install scripts
+To update, `git pull` and run the installer again. It keeps `.env` and `data/`.
+
+## Backing up to a local folder or mounted share
+
+The service is sandboxed (`ProtectSystem=strict`) and the backup scripts run inside
+that sandbox. Allow the backup folder, and make sure the service user can write to it:
 
 ```bash
-sudo cp backup-plex.sh /usr/local/bin/
-sudo cp cleanup-plex-snapshots.sh /usr/local/bin/
-sudo cp backup-scripts.sh /usr/local/bin/
-sudo chmod +x /usr/local/bin/backup-plex.sh
-sudo chmod +x /usr/local/bin/cleanup-plex-snapshots.sh
-sudo chmod +x /usr/local/bin/backup-scripts.sh
+sudo systemctl edit replexon
+#   [Service]
+#   ReadWritePaths=/mnt/nas/plex-backups
+sudo systemctl restart replexon
 ```
 
-### 4. SSH key setup (for cleanup script)
+Backing up to a NAS over the rsync daemon needs no extra paths.
 
-The cleanup script uses SSH to list and delete snapshots on the NAS. Set up key-based auth:
+## Upgrading from 1.x
+
+1.x was configured by editing the scripts and root's crontab. In 2.0:
+
+1. Run `sudo bash native/install.sh` again.
+2. Remove the old lines from root's crontab (`sudo crontab -e`): `backup-plex.sh`,
+   `cleanup-plex-snapshots.sh`. The installer warns if they are still there.
+   Leaving them makes backups run twice.
+3. Open the web UI and finish the setup wizard. Your Plex path, NAS address,
+   rsync user/module and retention go in there. The rsync password is entered
+   once and stored encrypted.
+4. The old `/usr/local/bin/backup-plex.sh` and `cleanup-plex-snapshots.sh` copies can be deleted.
+
+To keep showing old runs, point `BACKUP_LOG_PATH` in `/opt/replexon/.env` at the old
+`/var/log/plex-backup.log` and add that file to `ReadWritePaths`.
+
+## Running the script by hand
+
+`scripts/backup-plex.sh` reads its settings from the environment, so it can still
+run outside the app (for example from your own scheduler). When it is not started
+by RePlexOn it sources `/etc/replexon/backup.env` if present:
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/nas_backup -N ""
-ssh-copy-id -i ~/.ssh/nas_backup admin@YOUR_NAS_IP
+# /etc/replexon/backup.env  (chmod 600)
+PLEX_DATA="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
+BACKUP_MODE=nas                 # or: local
+BACKUP_DIR=/mnt/backups         # local mode
+NAS_IP=192.168.1.50             # nas mode
+RSYNC_USER=backupuser
+RSYNC_MODULE=plex-backups
+RSYNC_PASSWORD_FILE=/etc/replexon/rsync.secret
+BACKUP_LOG_PATH=/var/log/plex-backup.log
+SNAPSHOT_KEEP_COUNT=4
+BACKUP_ITEMS=databases,preferences,plugins
+DB_SAFETY=safe_copy
 ```
 
-Then add to `~/.ssh/config`:
+See `rsync.secret.example` for the password file format.
 
-```
-Host nas
-    HostName YOUR_NAS_IP
-    User admin
-    IdentityFile ~/.ssh/nas_backup
-```
+`BACKUP_COMMAND` in `.env` replaces the script for the "Run Now" button and scheduled
+backups, for setups that need `sudo` or a wrapper. The command must write the same
+log markers (below).
 
-### 5. Crontab entries
+`backup-scripts.sh` is an optional extra from 1.x that copies scripts and configs to
+the NAS once a month. The app does not schedule it.
 
-```bash
-sudo crontab -e
-```
+## Database safety
 
-Add:
+Plex keeps its library in SQLite databases with write-ahead logs. Copying those files
+while Plex writes can give a broken backup. The script copies `.db`, `-wal` and `-shm`
+to a scratch folder, runs `sqlite3 .backup` on the copy, and checks the result with
+`PRAGMA quick_check`. If that fails the run is marked FAILED; the live database is
+never copied instead. (Docker users can also pause the Plex container during the
+copy; that mode does not apply here.)
 
-```cron
-# RePlexOn backup schedule
-0 3 * * *   /usr/local/bin/backup-plex.sh >> /var/log/plex-backup.log 2>&1
-0 4 * * 0   /usr/local/bin/cleanup-plex-snapshots.sh >> /var/log/plex-backup.log 2>&1
-0 5 1 * *   /usr/local/bin/backup-scripts.sh >> /var/log/plex-backup.log 2>&1
-```
+## Log format
 
-## Database Safety
-
-The backup script creates consistent SQLite snapshots before rsyncing, preventing database corruption from backing up live files.
-
-### How It Works
-
-Plex stores its library data in SQLite databases (`Plug-in Support/Databases/*.db`). These databases have active WAL (Write-Ahead Log) files that can be hundreds of megabytes. Rsyncing them while Plex is writing can produce an inconsistent backup.
-
-The script handles this automatically:
-
-1. **Safe snapshot** -- Uses `sqlite3 <db> ".backup <safe-copy>"` to create a consistent copy of each database
-2. **Exclude live files** -- The main rsync skips live `.db`, `.db-shm`, and `.db-wal` files
-3. **Push safe copies** -- A second rsync sends the consistent snapshots to the correct path on the NAS
-4. **Automatic cleanup** -- The staging directory (`/tmp/plex-db-safe/`) is removed via a shell trap, even if the script fails
-
-### Prerequisites
-
-```bash
-sudo apt install sqlite3
-```
-
-### Fallback Behavior
-
-If `sqlite3` is not installed or the `.backup` command fails, the script logs a warning and falls back to rsyncing live database files -- identical to the behavior before this feature was added. A degraded backup is always better than no backup.
-
-### Verifying Database Integrity
-
-After a backup, you can verify the backed-up databases are consistent:
-
-```bash
-sqlite3 /path/to/backed-up/com.plexapp.plugins.library.db "PRAGMA integrity_check"
-# Expected output: ok
-```
-
-## NAS/Synology rsync Daemon Setup
-
-On your Synology NAS, enable the rsync service:
-
-1. **Control Panel > File Services > rsync** -- Enable rsync service
-2. Create an rsync module in `/etc/rsyncd.conf` (or via Synology UI)
-3. Set read/write permissions for your backup user
-
-Example `/etc/rsyncd.conf` module:
-
-```ini
-[plex-backups]
-    path = /volume1/plex-backups
-    auth users = backupuser
-    secrets file = /etc/rsyncd.secrets
-    read only = false
-```
-
-## Log Format
-
-These scripts produce log markers that RePlexOn's `log_parser.py` expects. **Do not modify the marker format:**
+`app/services/log_parser.py` reads these markers. Do not change them:
 
 ```
 === Plex Backup Started: Mon Feb 23 03:00:01 AM EST 2026 ===
@@ -136,3 +106,7 @@ These scripts produce log markers that RePlexOn's `log_parser.py` expects. **Do 
 === Plex Backup FAILED with code 1: Mon Feb 23 03:00:01 AM EST 2026 ===
 === Plex Snapshot Cleanup - Sun Feb 23 04:00:01 AM EST 2026 ====
 ```
+
+## NAS rsync daemon
+
+See [docs/nas.md](../docs/nas.md).

@@ -1,7 +1,8 @@
-/var/log/plex-backup.log
-/var/log/plex-backup-tracking.log
+# Installed by native/install.sh, which fills in SERVICE_USER.
+/opt/replexon/data/logs/plex-backup.log
+/opt/replexon/data/logs/plex-backup-tracking.log
 {
-    su root syslog
+    su SERVICE_USER SERVICE_USER
     weekly
     rotate 4
     compress

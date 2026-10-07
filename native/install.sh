@@ -1,389 +1,102 @@
 #!/bin/bash
 # =============================================================================
-# RePlexOn Installer
+# RePlexOn bare-metal installer (Ubuntu / Debian, systemd)
 #
-# Usage:
-#   sudo bash install.sh                 # Default mode (minimal prompts)
-#   sudo bash install.sh --interactive   # Interactive mode (prompts for all config)
+#   sudo bash native/install.sh
 #
-# Installs the RePlexOn Plex backup dashboard and optionally sets up
-# the backup scripts, systemd service, and cron schedules.
+# Installs the app to /opt/replexon as a systemd service. Everything else
+# (Plex location, destination, schedule, email) is set in the web setup wizard;
+# the app runs the backups itself, so no crontab entries are needed.
+# Docker is the recommended way to run RePlexOn; see the main README.
 # =============================================================================
 
 set -euo pipefail
 
-APP_NAME="RePlexOn"
 INSTALL_DIR="/opt/replexon"
-CONFIG_DIR="/etc/replexon"
-SCRIPT_DIR=$(cd "$(dirname "$0")/.." && pwd)  # repo root (this file lives in native/)
-INTERACTIVE=false
+REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)  # repo root (this file lives in native/)
+PORT=9847
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[+]${NC} $*"; }
 warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 err()  { echo -e "${RED}[x]${NC} $*" >&2; }
-info() { echo -e "${BLUE}[i]${NC} $*"; }
 
-# Parse arguments
-for arg in "$@"; do
-    case $arg in
-        --interactive|-i) INTERACTIVE=true ;;
-        --help|-h)
-            echo "Usage: sudo bash install.sh [--interactive]"
-            echo ""
-            echo "Options:"
-            echo "  --interactive, -i   Prompt for all configuration values"
-            echo "  --help, -h          Show this help"
-            exit 0
-            ;;
-        *) err "Unknown option: $arg"; exit 1 ;;
-    esac
-done
+case "${1:-}" in
+    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+    "") ;;
+    *) err "Unknown option: $1"; exit 1 ;;
+esac
 
-# ── Pre-flight Checks ─────────────────────────────────────────────────────────
+[ "$(id -u)" -eq 0 ] || { err "Run as root (sudo)."; exit 1; }
+. /etc/os-release 2>/dev/null || true
+case "${ID:-}" in
+    ubuntu|debian) log "Detected ${PRETTY_NAME:-$ID}" ;;
+    *) warn "Untested OS '${ID:-unknown}'; continuing (needs apt and systemd)" ;;
+esac
 
-check_os() {
-    if [ ! -f /etc/os-release ]; then
-        err "Cannot detect OS. This installer requires Ubuntu or Debian."
-        exit 1
-    fi
-    . /etc/os-release
-    case "$ID" in
-        ubuntu|debian) log "Detected $PRETTY_NAME" ;;
-        *)
-            err "Unsupported OS: $ID. This installer is designed for Ubuntu/Debian."
-            exit 1
-            ;;
-    esac
-}
+log "Installing system packages..."
+apt-get update -qq
+apt-get install -y -qq python3 python3-venv rsync sqlite3 bc curl > /dev/null
 
-check_root() {
-    if [ "$(id -u)" -ne 0 ]; then
-        err "This script must be run as root (use sudo)."
-        exit 1
-    fi
-}
+PYV=$(python3 -c 'import sys; print("%d%02d" % sys.version_info[:2])')
+[ "$PYV" -ge 310 ] || { err "Python 3.10 or newer is required (found $(python3 -V))."; exit 1; }
 
-# ── System Dependencies ───────────────────────────────────────────────────────
+# Run as the plex user when present so the app can read the Plex data folder.
+if id plex &>/dev/null; then SERVICE_USER=plex; else SERVICE_USER=www-data; fi
+log "Service user: $SERVICE_USER"
 
-install_system_deps() {
-    log "Installing system dependencies..."
-    apt-get update -qq
-    apt-get install -y -qq python3 python3-venv rsync > /dev/null
+log "Copying app to $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR"
+rsync -a --delete \
+    --exclude='venv/' --exclude='.venv/' --exclude='data/' --exclude='.env' \
+    --exclude='.git/' --exclude='__pycache__/' --exclude='*.pyc' --exclude='tests/' \
+    "$REPO_DIR/" "$INSTALL_DIR/"
+mkdir -p "$INSTALL_DIR/data/logs" "$INSTALL_DIR/data/scratch"
 
-    # msmtp is optional for email
-    if $INTERACTIVE; then
-        read -rp "Install msmtp for email notifications? [Y/n] " install_msmtp
-        install_msmtp=${install_msmtp:-Y}
-    else
-        install_msmtp="Y"
-    fi
-    if [[ "$install_msmtp" =~ ^[Yy] ]]; then
-        apt-get install -y -qq msmtp msmtp-mta > /dev/null
-        log "msmtp installed"
-    fi
-}
+log "Creating Python virtual environment..."
+python3 -m venv "$INSTALL_DIR/venv"
+"$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
+"$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
 
-# ── Application Directory ─────────────────────────────────────────────────────
+ENV_FILE="$INSTALL_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+    warn "$ENV_FILE exists, leaving it alone"
+else
+    # Bootstrap paths only. SECRET_KEY is generated into data/.secret_key on first start.
+    cat > "$ENV_FILE" <<EOF
+DATA_DIR=$INSTALL_DIR/data
+BACKUP_LOG_PATH=$INSTALL_DIR/data/logs/plex-backup.log
+BACKUP_SCRIPT_PATH=$INSTALL_DIR/scripts/backup-plex.sh
+SCRATCH_DIR=$INSTALL_DIR/data/scratch
+EOF
+    chmod 600 "$ENV_FILE"
+    log "Wrote $ENV_FILE"
+fi
+chmod +x "$INSTALL_DIR"/scripts/*.sh
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
-create_app_directory() {
-    log "Setting up application directory at $INSTALL_DIR..."
+sed "s/SERVICE_USER/$SERVICE_USER/g" "$INSTALL_DIR/native/logrotate-replexon" > /etc/logrotate.d/replexon
+chmod 644 /etc/logrotate.d/replexon
 
-    if [ -d "$INSTALL_DIR" ]; then
-        warn "$INSTALL_DIR already exists. Updating files..."
-    else
-        mkdir -p "$INSTALL_DIR"
-    fi
+log "Installing systemd service..."
+cp "$INSTALL_DIR/native/systemd/replexon.service" /etc/systemd/system/replexon.service
+sed -i "s/^User=.*/User=$SERVICE_USER/; s/^Group=.*/Group=$SERVICE_USER/" /etc/systemd/system/replexon.service
+systemctl daemon-reload
+systemctl enable --now replexon
 
-    # Copy app files (exclude venv, data, .env, .git)
-    rsync -a --exclude='venv/' --exclude='.venv/' --exclude='data/' \
-        --exclude='.env' --exclude='.git/' --exclude='__pycache__/' \
-        --exclude='*.pyc' --exclude='install.sh' \
-        "$SCRIPT_DIR/" "$INSTALL_DIR/"
+if crontab -l 2>/dev/null | grep -q "backup-plex.sh"; then
+    warn "root's crontab still runs backup-plex.sh. RePlexOn now schedules backups itself;"
+    warn "remove those lines (sudo crontab -e) so backups do not run twice."
+fi
 
-    # Create data directory
-    mkdir -p "$INSTALL_DIR/data"
+cat <<EOF
 
-    # Determine service user
-    if id "plex" &>/dev/null; then
-        SERVICE_USER="plex"
-    else
-        SERVICE_USER="www-data"
-        if $INTERACTIVE; then
-            read -rp "Service user (default: $SERVICE_USER): " custom_user
-            SERVICE_USER=${custom_user:-$SERVICE_USER}
-        fi
-    fi
-    SERVICE_GROUP="$SERVICE_USER"
+  RePlexOn is running.  Open http://$(hostname -I | awk '{print $1}'):$PORT to finish setup.
 
-    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
-    log "Owned by $SERVICE_USER:$SERVICE_GROUP"
-}
+  Backing up to a local folder or a mounted share? Let the service write there:
+    sudo systemctl edit replexon
+      [Service]
+      ReadWritePaths=/path/to/backups
+  and make sure $SERVICE_USER can write to it.
 
-# ── Python Virtual Environment ────────────────────────────────────────────────
-
-setup_venv() {
-    log "Creating Python virtual environment..."
-    python3 -m venv "$INSTALL_DIR/venv"
-    "$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
-    "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/requirements.txt"
-    log "Python dependencies installed"
-}
-
-# ── Environment Configuration ─────────────────────────────────────────────────
-
-configure_env() {
-    local env_file="$INSTALL_DIR/.env"
-
-    if [ -f "$env_file" ]; then
-        warn ".env already exists, skipping (edit manually if needed)"
-        return
-    fi
-
-    log "Generating .env configuration..."
-    cp "$INSTALL_DIR/.env.example" "$env_file"
-
-    # Auto-generate SECRET_KEY
-    SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    sed -i "s/^SECRET_KEY=.*/SECRET_KEY=$SECRET_KEY/" "$env_file"
-    log "SECRET_KEY generated"
-
-    if $INTERACTIVE; then
-        # Backup log path
-        read -rp "Backup log path [/var/log/plex-backup.log]: " log_path
-        log_path=${log_path:-/var/log/plex-backup.log}
-        sed -i "s|^BACKUP_LOG_PATH=.*|BACKUP_LOG_PATH=$log_path|" "$env_file"
-
-        # Backup script path
-        read -rp "Backup script path [/usr/local/bin/backup-plex.sh]: " script_path
-        script_path=${script_path:-/usr/local/bin/backup-plex.sh}
-        sed -i "s|^BACKUP_SCRIPT_PATH=.*|BACKUP_SCRIPT_PATH=$script_path|" "$env_file"
-
-        # Plex data path - try to auto-detect
-        detected_plex=""
-        for plex_path in \
-            "/var/lib/plexmediaserver/Library/Application Support/Plex Media Server" \
-            "/snap/plexmediaserver/common/Library/Application Support/Plex Media Server" \
-            "/opt/plexmediaserver/Library/Application Support/Plex Media Server"; do
-            if [ -d "$plex_path" ]; then
-                detected_plex="$plex_path"
-                break
-            fi
-        done
-        if [ -n "$detected_plex" ]; then
-            info "Auto-detected Plex data at: $detected_plex"
-            read -rp "Plex data path [$detected_plex]: " plex_data
-            plex_data=${plex_data:-$detected_plex}
-        else
-            read -rp "Plex data path: " plex_data
-        fi
-        if [ -n "$plex_data" ]; then
-            sed -i "s|^PLEX_DATA_PATH=.*|PLEX_DATA_PATH=$plex_data|" "$env_file"
-        fi
-
-        # Backup destination
-        read -rp "Backup destination (e.g., rsync://user@NAS_IP/module/plex): " backup_dest
-        if [ -n "$backup_dest" ]; then
-            sed -i "s|^BACKUP_DESTINATION=.*|BACKUP_DESTINATION=$backup_dest|" "$env_file"
-        fi
-
-        # Cron editing
-        read -rp "Enable cron editing via UI? [y/N] " cron_edit
-        if [[ "$cron_edit" =~ ^[Yy] ]]; then
-            sed -i "s/^CRON_EDIT_ENABLED=.*/CRON_EDIT_ENABLED=true/" "$env_file"
-        fi
-    fi
-
-    chown "$SERVICE_USER:$SERVICE_GROUP" "$env_file"
-    chmod 600 "$env_file"
-    log ".env configured"
-}
-
-# ── Backup Scripts ────────────────────────────────────────────────────────────
-
-install_backup_scripts() {
-    log "Installing backup scripts..."
-    mkdir -p "$CONFIG_DIR"
-
-    # Create rsync secret file
-    if [ ! -f "$CONFIG_DIR/rsync.secret" ]; then
-        cp "$INSTALL_DIR/native/rsync.secret.example" "$CONFIG_DIR/rsync.secret"
-        chmod 600 "$CONFIG_DIR/rsync.secret"
-        log "Created $CONFIG_DIR/rsync.secret (edit with your rsync password)"
-    else
-        warn "$CONFIG_DIR/rsync.secret already exists, skipping"
-    fi
-
-    # Copy scripts to /usr/local/bin
-    for script in backup-plex.sh cleanup-plex-snapshots.sh backup-scripts.sh; do
-        cp "$INSTALL_DIR/scripts/$script" "/usr/local/bin/$script"
-        chmod +x "/usr/local/bin/$script"
-    done
-
-    if $INTERACTIVE; then
-        # Configure script variables
-        read -rp "NAS/Synology IP address: " nas_ip
-        if [ -n "$nas_ip" ]; then
-            sed -i "s/^NAS_IP=.*/NAS_IP=\"$nas_ip\"/" /usr/local/bin/backup-plex.sh
-            sed -i "s/^NAS_IP=.*/NAS_IP=\"$nas_ip\"/" /usr/local/bin/cleanup-plex-snapshots.sh
-            sed -i "s/^NAS_IP=.*/NAS_IP=\"$nas_ip\"/" /usr/local/bin/backup-scripts.sh
-        fi
-
-        read -rp "Rsync username [backupuser]: " rsync_user
-        rsync_user=${rsync_user:-backupuser}
-        sed -i "s/^RSYNC_USER=.*/RSYNC_USER=\"$rsync_user\"/" /usr/local/bin/backup-plex.sh
-        sed -i "s/^RSYNC_USER=.*/RSYNC_USER=\"$rsync_user\"/" /usr/local/bin/backup-scripts.sh
-
-        read -rp "Rsync module name [plex-backups]: " rsync_module
-        rsync_module=${rsync_module:-plex-backups}
-        sed -i "s/^RSYNC_MODULE=.*/RSYNC_MODULE=\"$rsync_module\"/" /usr/local/bin/backup-plex.sh
-        sed -i "s/^RSYNC_MODULE=.*/RSYNC_MODULE=\"$rsync_module\"/" /usr/local/bin/backup-scripts.sh
-
-        read -rp "Failure notification email (leave empty to disable): " fail_email
-        if [ -n "$fail_email" ]; then
-            sed -i "s/^EMAIL_ON_FAILURE=.*/EMAIL_ON_FAILURE=\"$fail_email\"/" /usr/local/bin/backup-plex.sh
-        fi
-
-        # Plex data path in backup script
-        if [ -n "${plex_data:-}" ]; then
-            sed -i "s|^PLEX_DATA=.*|PLEX_DATA=\"$plex_data\"|" /usr/local/bin/backup-plex.sh
-        fi
-    fi
-
-    # Install logrotate config
-    cp "$INSTALL_DIR/native/logrotate-replexon" /etc/logrotate.d/replexon
-    chmod 644 /etc/logrotate.d/replexon
-    log "Logrotate config installed"
-
-    log "Backup scripts installed to /usr/local/bin/"
-}
-
-# ── Crontab ───────────────────────────────────────────────────────────────────
-
-setup_crontab() {
-    local cron_entries="# RePlexOn backup schedule
-0 3 * * *   /usr/local/bin/backup-plex.sh >> /var/log/plex-backup.log 2>&1
-0 4 * * 0   /usr/local/bin/cleanup-plex-snapshots.sh >> /var/log/plex-backup.log 2>&1
-0 5 1 * *   /usr/local/bin/backup-scripts.sh >> /var/log/plex-backup.log 2>&1"
-
-    if $INTERACTIVE; then
-        echo ""
-        info "Recommended crontab entries:"
-        echo "$cron_entries"
-        echo ""
-        read -rp "Add these to root's crontab? [Y/n] " add_cron
-        add_cron=${add_cron:-Y}
-        if [[ "$add_cron" =~ ^[Yy] ]]; then
-            # Check if entries already exist
-            if crontab -l 2>/dev/null | grep -q "backup-plex.sh"; then
-                warn "Crontab entries already exist, skipping"
-            else
-                (crontab -l 2>/dev/null; echo ""; echo "$cron_entries") | crontab -
-                log "Crontab entries added"
-            fi
-        fi
-    else
-        echo ""
-        info "Add these to root's crontab (sudo crontab -e):"
-        echo "$cron_entries"
-    fi
-}
-
-# ── systemd Service ───────────────────────────────────────────────────────────
-
-install_systemd_service() {
-    log "Installing systemd service..."
-    cp "$INSTALL_DIR/native/systemd/replexon.service" /etc/systemd/system/replexon.service
-
-    # Update user/group in service file
-    sed -i "s/^User=.*/User=$SERVICE_USER/" /etc/systemd/system/replexon.service
-    sed -i "s/^Group=.*/Group=$SERVICE_GROUP/" /etc/systemd/system/replexon.service
-
-    systemctl daemon-reload
-    systemctl enable replexon
-    log "Service installed and enabled"
-}
-
-# ── Initialize App ────────────────────────────────────────────────────────────
-
-initialize_app() {
-    log "Initializing database..."
-    cd "$INSTALL_DIR"
-    sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/python" replexon.py init-db
-
-    if $INTERACTIVE; then
-        echo ""
-        read -rp "Create admin user now? [Y/n] " create_admin
-        create_admin=${create_admin:-Y}
-        if [[ "$create_admin" =~ ^[Yy] ]]; then
-            read -rp "Admin username [admin]: " admin_user
-            admin_user=${admin_user:-admin}
-            sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/python" replexon.py create-user --username "$admin_user"
-        fi
-    fi
-}
-
-# ── Summary ───────────────────────────────────────────────────────────────────
-
-print_summary() {
-    echo ""
-    echo "============================================"
-    echo -e "  ${GREEN}${APP_NAME} Installation Complete${NC}"
-    echo "============================================"
-    echo ""
-    echo "  Install directory:  $INSTALL_DIR"
-    echo "  Config directory:   $CONFIG_DIR"
-    echo "  Service user:       $SERVICE_USER"
-    echo "  Web port:           9847"
-    echo ""
-
-    if ! $INTERACTIVE; then
-        echo "  Manual steps remaining:"
-        echo "  ────────────────────────"
-        echo "  1. Edit rsync password:   sudo nano $CONFIG_DIR/rsync.secret"
-        echo "  2. Edit backup scripts:   sudo nano /usr/local/bin/backup-plex.sh"
-        echo "  3. Create user:           cd $INSTALL_DIR && sudo -u $SERVICE_USER venv/bin/python replexon.py create-user --username admin"
-        echo "  4. Set up crontab:        sudo crontab -e"
-        echo ""
-    fi
-
-    echo "  Start the service:"
-    echo "    sudo systemctl start replexon"
-    echo ""
-    echo "  Then visit: http://$(hostname -I | awk '{print $1}'):9847"
-    echo ""
-}
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-
-main() {
-    echo ""
-    echo -e "${BLUE}  ____       ____  _            ___"
-    echo " |  _ \ ___ |  _ \| | _____  __/ _ \ _ __"
-    echo " | |_) / _ \| |_) | |/ _ \ \/ / | | | '_ \\"
-    echo " |  _ <  __/|  __/| |  __/>  <| |_| | | | |"
-    echo -e " |_| \_\___||_|   |_|\___/_/\_\\\\\___/|_| |_|${NC}"
-    echo ""
-    echo "  Installer"
-    echo ""
-
-    check_os
-    check_root
-    install_system_deps
-    create_app_directory
-    setup_venv
-    configure_env
-    install_backup_scripts
-    setup_crontab
-    install_systemd_service
-    initialize_app
-    print_summary
-}
-
-main
+EOF
