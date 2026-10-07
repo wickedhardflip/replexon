@@ -259,6 +259,11 @@ if [ $EXIT -eq 0 ] && [ "$SAFE_DB_SUCCESS" = true ]; then
         "$STAGING_DIR/" \
         "${RSYNC_DEST}/plex-current/Plug-in Support/Databases/"
     DB_PUSH_EXIT=$?
+    # The staged databases are pushed outside the main rsync, so add them to its totals.
+    STAGED_BYTES=$(du -sb "$STAGING_DIR" 2>/dev/null | cut -f1)
+    TOTAL_SIZE=$(( ${TOTAL_SIZE:-0} + ${STAGED_BYTES:-0} ))
+    XFER_SIZE=$(( ${XFER_SIZE:-0} + ${STAGED_BYTES:-0} ))
+    XFER_FILES=$(( ${XFER_FILES:-0} + ${DB_COUNT:-0} ))
     if [ $DB_PUSH_EXIT -ne 0 ]; then
         echo "ERROR: failed to sync safe database copies (exit $DB_PUSH_EXIT)"
         EXIT=$DB_PUSH_EXIT
