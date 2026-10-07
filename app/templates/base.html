@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}RePlexOn{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=5">
+    <link rel="icon" type="image/svg+xml" href="/static/logo/replexon-sign.svg">
+    <link rel="stylesheet" href="/static/css/style.css?v=6">
+    <link rel="stylesheet" href="/static/css/theme.css?v=6">
     <script>
         (function() {
-            var t = localStorage.getItem('theme');
-            if (t !== 'light') document.documentElement.setAttribute('data-theme', 'dark');
+            try { if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
         })();
     </script>
     <script src="/static/js/htmx.min.js" defer></script>
@@ -19,7 +20,7 @@
     <nav class="top-nav">
         <button class="nav-hamburger" id="nav-hamburger" aria-label="Menu">&#9776;</button>
         <a href="/dashboard" class="nav-brand">
-            <h1>RePlexOn</h1>
+            <img class="brand-sign" src="/static/logo/replexon-sign.svg" alt="RePlexOn">
         </a>
 
         <ul class="nav-links" id="nav-links">
@@ -72,7 +73,7 @@
     </main>
     {% endblock %}
 
-    <script src="/static/js/app.js?v=5"></script>
+    <script src="/static/js/app.js?v=6"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

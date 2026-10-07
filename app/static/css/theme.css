@@ -1,0 +1,150 @@
+/* RePlexOn theme: the Hahbah transit look (cream "day", "midnight" dark), with RePlexOn's own
+   amber line color. Tokens copied from homelab/portal dashboard.html; style.css uses the aliases below.
+   Loaded after style.css. Font sizes stay as style.css sets them. */
+
+:root, [data-theme="day"] {
+  --bg: #efece3; --panel: #ffffff; --panel-2: #f7f5ef; --border: #dcd7c9;
+  --ink: #1b1d22; --muted: #646871; --grid: #e7e3d7; --grid-2: #ddd8ca;
+  --good: #1f7a45; --warn: #9a5800; --crit: #c42b2b; --info: #3f5f8f; --unknown: #8c909a;
+  --warn-bg: #fff3dc; --crit-bg: #fde7e7; --good-bg: #e5f4ea; --info-bg: #e8eef8;
+  --l-green: #16854a; --l-teal: #0b7b7e;
+  --hahbah-green: #4e6e58;
+  --accent: #9a6418; --accent-hover: #7d500f; --accent-bg: #f6ead6;  /* RePlexOn amber line (sign #b07a2a) */
+  --sign: #b07a2a; --sign-ink: #f1ece0;
+  --log-bg: #1b1d22; --log-ink: #e9e4d6;
+  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 4px 16px rgba(20,20,30,.06);
+  --shadow-lg: 0 2px 6px rgba(20,20,30,.08), 0 12px 32px rgba(20,20,30,.10);
+}
+[data-theme="dark"], [data-theme="midnight"] {
+  --bg: #070b16; --panel: #0f1528; --panel-2: #131a31; --border: #222c4a;
+  --ink: #e9edf6; --muted: #8e97ad; --grid: #121a33; --grid-2: #182243;
+  --good: #3ccf7e; --warn: #ffb547; --crit: #ff5d57; --info: #7aa7ff; --unknown: #6f7890;
+  --warn-bg: #3a2a0c; --crit-bg: #3d1414; --good-bg: #0f2e1d; --info-bg: #15223f;
+  --l-green: #2fc973; --l-teal: #2cc6c8;
+  --accent: #e7a84a; --accent-hover: #f3c06f; --accent-bg: #2e2210;
+  --log-bg: #050810; --log-ink: #cfd6e6;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 24px rgba(0,0,0,.35);
+  --shadow-lg: 0 2px 6px rgba(0,0,0,.5), 0 12px 32px rgba(0,0,0,.45);
+}
+
+/* Aliases for the names style.css and the templates already use. */
+:root, [data-theme] {
+  --nav-bg: var(--panel); --nav-text: var(--ink); --nav-muted: var(--muted);
+  --bg-page: var(--bg); --bg-card: var(--panel); --bg-card-hover: var(--panel-2); --bg-secondary: var(--panel-2);
+  --text-primary: var(--ink); --text-secondary: var(--muted); --text-muted: var(--muted);
+  --accent-purple: var(--accent); --accent-purple-hover: var(--accent-hover); --accent-purple-light: var(--accent-bg);
+  --accent-orange: var(--accent); --accent-blue: var(--info); --accent-pink: var(--crit);
+  --success: var(--good); --success-bg: var(--good-bg);
+  --warning: var(--warn); --warning-bg: var(--warn-bg);
+  --danger: var(--crit); --danger-bg: var(--crit-bg);
+  --border-light: var(--grid);
+  --shadow-sm: var(--shadow);
+  --radius: 14px; --radius-sm: 8px;
+}
+
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: "Overpass", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.mono, code, kbd { font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+/* ---------- top bar with the RePlexOn station sign ---------- */
+.top-nav { background: var(--panel); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+.nav-brand .brand-sign { display: block; height: 40px; width: auto; }
+.nav-links a { color: var(--muted); font-weight: 700; }
+.nav-links a:hover { color: var(--ink); background: var(--panel-2); }
+.nav-links a.active { color: var(--ink); background: var(--accent-bg); box-shadow: inset 0 -3px 0 var(--accent); }
+.theme-toggle, .nav-hamburger { color: var(--ink); }
+.theme-toggle:hover { background: var(--panel-2); }
+.nav-user .logout-btn { color: var(--muted); border-color: var(--border); }
+.nav-user .logout-btn:hover { color: var(--crit); background: var(--crit-bg); }
+@media (max-width: 768px) {
+  .nav-links { background: var(--panel); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+}
+
+/* ---------- cards, sections, buttons, chips (Hahbah patterns) ---------- */
+.card, .stat-card, .chart-card, .settings-section {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+}
+.card h3, .chart-card h3, .settings-section h3 { font-weight: 800; color: var(--ink); }
+.sec { font-size: 0.75rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+.btn { font-weight: 700; border-radius: 8px; }
+.btn-primary, .btn-blue { background: var(--ink); color: var(--panel); border: 1px solid var(--ink); }
+.btn-primary:hover, .btn-blue:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--muted); background: var(--panel); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chip { display: inline-block; font-size: 0.75rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+.chip.good { background: var(--good-bg); color: var(--good); border-color: transparent; }
+.chip.crit { background: var(--crit-bg); color: var(--crit); border-color: transparent; }
+.chip.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.badge { font-weight: 800; letter-spacing: .04em; }
+.form-input, .form-select, .form-textarea { background: var(--panel); color: var(--ink); border: 1px solid var(--border); }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-bg); }
+.alert-error { background: var(--crit-bg); color: var(--crit); border-color: transparent; }
+.alert-success { background: var(--good-bg); color: var(--good); border-color: transparent; }
+.alert-info { background: var(--info-bg); color: var(--info); border-color: transparent; }
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+/* A run whose Plex database could not be copied safely: impossible to miss. */
+.db-safety-badge.db-live { background: var(--crit); color: #fff; }
+tr.db-failed td:first-child { box-shadow: inset 4px 0 0 var(--crit); }
+
+/* ---------- option cards (settings + wizard) ---------- */
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); margin-bottom: 8px; cursor: pointer; }
+.choice input { margin-top: 4px; }
+.choice b { display: block; color: var(--ink); }
+.choice p { margin: 2px 0 0; color: var(--muted); font-size: 0.8125rem; }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-bg); }
+.choice.disabled { opacity: .75; cursor: default; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 1rem; max-width: 640px; }
+.help { color: var(--muted); font-size: 0.75rem; margin-top: 0.25rem; }
+.form-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
+
+/* ---------- ticket paper: login + setup wizard ---------- */
+.ticket-page {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+  background: radial-gradient(ellipse at 50% 40%, #3a342a 0%, #1d1b17 70%);
+}
+.ticket {
+  --paper: #eee5d0; --paper-edge: #d9ccb0; --ink: #3f3a33; --muted: #6d6558; --rule: #b9ad95;
+  --field: rgba(255, 252, 244, .45); --field-border: #9c917d; --focus: #56718f; --stamp: #a8322a;
+  --panel: rgba(255, 252, 244, .55); --panel-2: rgba(255, 252, 244, .35); --border: var(--rule);
+  position: relative; width: min(460px, 100%); padding: 30px 32px 26px; border-radius: 18px; overflow: hidden;
+  color: var(--ink); background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 90% 80% at 50% 45%, transparent 55%, rgba(150, 115, 60, .22) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .33 0 0 0 0 .2 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .3), inset 0 0 0 1px rgba(255, 255, 255, .35);
+}
+.ticket.wide { width: min(640px, 100%); }
+.ticket .logo { display: block; width: 100%; height: auto; margin-bottom: 14px; }
+.ticket .sub { margin: 0 0 18px; color: var(--muted); }
+.ticket .form-label { color: var(--ink); font-weight: 800; }
+.ticket .form-input, .ticket .form-select {
+  background: var(--field); color: var(--ink); border: 1.5px solid var(--field-border);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .12); border-radius: 10px;
+}
+.ticket .form-input:focus { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: none; }
+.ticket .btn-primary { background: #151412; color: #f3ead8; border-color: #151412; }
+.ticket .btn-primary:hover { background: #26231f; }
+.ticket .btn-secondary { background: transparent; color: var(--ink); border-color: var(--rule); }
+.ticket .choice:has(input:checked) { border-color: var(--ink); background: rgba(255, 252, 244, .7); }
+.ticket .alert-error, .stamp {
+  display: inline-block; margin: 4px 0 10px; padding: 5px 12px; border: 2.5px solid var(--stamp); border-radius: 6px;
+  color: var(--stamp); font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  transform: rotate(-1.5deg); background: rgba(168, 50, 42, .05);
+}
+.ticket .alert-success { background: transparent; color: var(--l-green); padding: 0; margin-bottom: 8px; }
+.stops { display: flex; list-style: none; margin: 0 0 18px; padding: 0; gap: 0; position: relative; }
+.stops::before { content: ""; position: absolute; left: 6px; right: 6px; top: 6px; height: 4px; background: var(--rule); }
+.stops li { flex: 1; position: relative; font-size: 0.6875rem; font-weight: 800; color: var(--muted); padding-top: 18px; text-align: center; }
+.stops li::before { content: ""; position: absolute; top: 0; left: 50%; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--paper); border: 3px solid var(--rule); box-sizing: border-box; }
+.stops li.done::before { background: var(--sign); border-color: var(--sign); }
+.stops li.here { color: var(--ink); }
+.stops li.here::before { background: var(--paper); border-color: var(--ink); }
+@media (max-width: 480px) {
+  .ticket { padding: 24px 18px 20px; }
+  .stops li { font-size: 0; }
+}

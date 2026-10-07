@@ -1,44 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In - RePlexOn</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-logo">
-                <h2><span class="text-orange">Re</span><span class="text-blue">Plex</span><span class="text-orange">On</span></h2>
-                <p class="tagline">"Previously on your Plex server..."</p>
+{% extends "base.html" %}
+{% block title %}Sign In - RePlexOn{% endblock %}
+
+{% block body %}
+<div class="ticket-page">
+    <div class="ticket">
+        <img class="logo" src="/static/logo/replexon-sign.svg" alt="RePlexOn - Backup Line">
+        <p class="sub">"Previously on your Plex server..."</p>
+
+        {% if error %}
+        <div class="alert alert-error" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/login">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <input type="text" id="username" name="username" class="form-input"
+                       value="{{ username | default('', true) }}" required autofocus autocomplete="username">
             </div>
-
-            {% if error %}
-            <div class="alert alert-error">{{ error }}</div>
-            {% endif %}
-
-            <form method="post" action="/login">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
-                <div class="form-group">
-                    <label class="form-label" for="username">Username</label>
-                    <input type="text" id="username" name="username" class="form-input"
-                           value="{{ username | default('', true) }}"
-                           placeholder="Enter username" required autofocus>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="password">Password</label>
-                    <input type="password" id="password" name="password" class="form-input"
-                           placeholder="Enter password" required>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
-                    Sign In
-                </button>
-            </form>
-        </div>
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+                Sign In
+            </button>
+        </form>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}
