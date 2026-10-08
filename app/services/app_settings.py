@@ -8,13 +8,14 @@ import base64
 import hashlib
 import logging
 import os
-from typing import Dict
+from typing import Dict, Optional
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
 from app.models.setting import AppSetting
+from app.services import timefmt
 
 logger = logging.getLogger("replexon")
 
@@ -58,6 +59,7 @@ def defaults() -> Dict[str, str]:
         "smtp_from": "",
         "email_recipient": "",
         "notify_on": "failure",
+        "timezone": timefmt.default_zone_name(),
     }
 
 
@@ -69,6 +71,11 @@ def get_setting(db: DBSession, key: str, default: str = "") -> str:
 def set_setting(db: DBSession, key: str, value: str) -> None:
     if key in SECRET_KEYS:
         raise ValueError("use set_secret() for secret settings")
+    if key == "timezone":
+        error = set_timezone(db, value)
+        if error:
+            raise ValueError(error)
+        return
     _write(db, key, value)
 
 
@@ -79,6 +86,20 @@ def _write(db: DBSession, key: str, value: str) -> None:
     else:
         db.add(AppSetting(key=key, value=value))
     db.commit()
+
+
+def set_timezone(db: DBSession, name: str) -> Optional[str]:
+    """Save the display/schedule time zone. Returns an error message, or None when saved."""
+    name = (name or "").strip()
+    if not timefmt.load_zone(name):
+        return f"Unknown time zone \"{name}\". Use an IANA name such as America/New_York or UTC."
+    changed = get_config(db)["timezone"] != name
+    _write(db, "timezone", name)
+    timefmt.set_zone(name)
+    if changed:
+        from app.services.scheduler_service import restart_counting
+        restart_counting(db)
+    return None
 
 
 def get_config(db: DBSession) -> Dict[str, str]:

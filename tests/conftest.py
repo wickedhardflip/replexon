@@ -15,6 +15,15 @@ from app.database import Base
 import app.models  # noqa: F401  (registers the tables)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_time_zone():
+    """The configured zone is cached per process; every test starts from the database's value."""
+    from app.services import timefmt
+    timefmt.reset()
+    yield
+    timefmt.reset()
+
+
 @pytest.fixture
 def db():
     """An in-memory SQLite database with all tables."""
