@@ -19,8 +19,8 @@
                 <td class="expand-icon">&#9654;</td>
                 <td><span class="badge badge-{{ backup.backup_type }}">{{ backup.backup_type | replace('_', ' ') }}</span></td>
                 <td><span class="badge badge-{{ backup.status }}">{{ backup.status }}</span></td>
-                <td>{{ backup.started_at.strftime('%Y-%m-%d') }}</td>
-                <td>{{ backup.started_at.strftime('%H:%M') }}{% if backup.finished_at %} &ndash; {{ backup.finished_at.strftime('%H:%M') }}{% endif %}</td>
+                <td>{{ backup.started_at | date }}</td>
+                <td>{{ backup.started_at | timerange(backup.finished_at) }}</td>
                 <td>{{ backup.size_display }}</td>
                 <td>{{ backup.transferred_display }}</td>
                 <td>{{ backup.duration_display }}</td>
@@ -31,8 +31,8 @@
                     <div class="log-detail-inner">
                         <div class="log-detail-grid">
                             <div><span class="settings-label">Backup ID</span> <span class="text-sm">#{{ backup.id }}</span></div>
-                            <div><span class="settings-label">Started</span> <span class="text-sm">{{ backup.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</span></div>
-                            <div><span class="settings-label">Finished</span> <span class="text-sm">{{ backup.finished_at.strftime('%Y-%m-%d %H:%M:%S') if backup.finished_at else '-' }}</span></div>
+                            <div><span class="settings-label">Started</span> <span class="text-sm">{{ backup.started_at | datetime }}</span></div>
+                            <div><span class="settings-label">Finished</span> <span class="text-sm">{{ backup.finished_at | datetime }}</span></div>
                             <div><span class="settings-label">Total Size</span> <span class="text-sm">{{ backup.size_display }}</span></div>
                             <div><span class="settings-label">Transferred</span> <span class="text-sm">{{ backup.transferred_display }}</span></div>
                             <div><span class="settings-label">Duration</span> <span class="text-sm">{{ backup.duration_display }}</span></div>

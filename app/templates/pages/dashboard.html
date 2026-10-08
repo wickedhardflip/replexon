@@ -9,8 +9,9 @@
     <h2>Dashboard</h2>
     <div class="flex items-center gap-1">
         <div class="next-backup" id="next-backup-indicator">
-            {% if next_backup_iso %}
-            <span class="next-backup-countdown" id="countdown" data-target="{{ next_backup_iso }}"></span>
+            {% if next_backup %}
+            <span class="next-backup-countdown" id="countdown" data-target="{{ next_backup | iso_utc }}"
+                  title="Next backup: {{ next_backup | datetime }} ({{ tz_name() }})"></span>
             <span class="next-backup-sep">|</span>
             {% endif %}
             <span class="pulse"></span>
@@ -85,7 +86,7 @@
                 <span class="text-warning">RUN</span>
                 {% endif %}
             </div>
-            <div class="stat-sub">{{ stats.last_backup.started_at.strftime('%b %d, %I:%M %p') }}</div>
+            <div class="stat-sub">{{ stats.last_backup.started_at | datetime }}</div>
             {% if stats.last_backup.db_safe is not none %}
             <div class="db-safety-badge {{ 'db-safe' if stats.last_backup.db_safe else 'db-live' }}">
                 {{ 'DB Safe' if stats.last_backup.db_safe else 'DB FAILED' }}
@@ -204,7 +205,7 @@
                 <tr style="cursor: pointer;" onclick="window.location='/logs/{{ backup.id }}'">
                     <td><span class="badge badge-{{ backup.backup_type }}">{{ backup.backup_type | replace('_', ' ') }}</span></td>
                     <td><span class="badge badge-{{ backup.status }}">{{ backup.status }}</span></td>
-                    <td>{{ backup.started_at.strftime('%b %d, %I:%M %p') }}</td>
+                    <td>{{ backup.started_at | datetime }}</td>
                     <td>{{ backup.size_display }}</td>
                     <td>{{ backup.duration_display }}</td>
                     <td class="text-xs text-muted">{{ backup.triggered_by }}</td>

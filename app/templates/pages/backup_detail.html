@@ -20,11 +20,11 @@
     </div>
     <div class="card">
         <div class="stat-label">Started</div>
-        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.started_at | datetime }}</div>
     </div>
     <div class="card">
         <div class="stat-label">Finished</div>
-        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.finished_at.strftime('%Y-%m-%d %H:%M:%S') if backup.finished_at else '-' }}</div>
+        <div class="text-sm" style="margin-top: 0.375rem;">{{ backup.finished_at | datetime }}</div>
     </div>
     <div class="card">
         <div class="stat-label">Duration</div>

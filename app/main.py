@@ -236,7 +236,9 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(404)
     async def not_found(request: Request, exc):
+        from app.services import timefmt
         templates = Jinja2Templates(directory="app/templates")
+        timefmt.register(templates.env)
         return templates.TemplateResponse(
             request, "pages/error.html",
             {"request": request, "status_code": 404, "message": "Page not found"},

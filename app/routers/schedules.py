@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session as DBSession
 
+from app.services import timefmt
 from app.dependencies import get_current_user, get_db
 from app.models.user import User
 from app.routers.setup import _back
@@ -15,6 +16,7 @@ from app.utils.security import generate_csrf_token, validate_csrf_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+timefmt.register(templates.env)
 
 
 @router.get("/schedules", response_class=HTMLResponse)

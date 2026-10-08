@@ -13,13 +13,14 @@ Strategy:
 
 import re
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session as DBSession
 
 from app.models.backup import BackupRun
+from app.services import timefmt
 
 # Patterns for the main log file
 BACKUP_START_RE = re.compile(r"=== Plex Backup Started: (.+?) ===")
@@ -68,6 +69,7 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
     if not path.exists():
         return 0
 
+    tz = timefmt.zone(db)  # the tracking file and log lines are in local time; we store UTC
     count = 0
     for line in path.read_text().strip().splitlines():
         line = line.strip()
@@ -80,20 +82,22 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
         except ValueError:
             continue
 
-        # The backup runs at 3 AM
-        started_at = backup_date.replace(hour=3, minute=0, second=0)
+        # The backup runs at 3 AM local time
+        local_start = backup_date.replace(hour=3, minute=0, second=0)
+        started_at = timefmt.to_utc_naive(local_start, tz)
         status = "success" if result.strip() == "success" else "failure"
 
         # Check for Sunday = snapshot day
-        is_sunday = started_at.weekday() == 6
+        is_sunday = local_start.weekday() == 6
         backup_type = "daily_mirror"
 
         # Skip dates that already have a run (imported earlier, or launched by RePlexOn itself)
+        day_start, day_end = timefmt.day_bounds_utc(backup_date.date(), tz)
         existing = (
             db.query(BackupRun)
             .filter(
-                BackupRun.started_at >= backup_date,
-                BackupRun.started_at < backup_date + timedelta(days=1),
+                BackupRun.started_at >= day_start,
+                BackupRun.started_at < day_end,
                 BackupRun.backup_type.in_(("daily_mirror", "manual")),
             )
             .first()
@@ -112,10 +116,12 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
 
         # If Sunday, also create a snapshot entry
         if is_sunday and status == "success":
+            snap_at = timefmt.to_utc_naive(local_start.replace(minute=30), tz)
+            cleanup_at = timefmt.to_utc_naive(local_start.replace(hour=4), tz)
             snap_existing = (
                 db.query(BackupRun)
                 .filter(
-                    BackupRun.started_at == started_at,
+                    BackupRun.started_at == snap_at,
                     BackupRun.backup_type == "snapshot",
                 )
                 .first()
@@ -124,7 +130,7 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
                 snap = BackupRun(
                     backup_type="snapshot",
                     status="success",
-                    started_at=started_at.replace(hour=3, minute=30),
+                    started_at=snap_at,
                     triggered_by="cron",
                 )
                 db.add(snap)
@@ -134,7 +140,7 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
             cleanup_existing = (
                 db.query(BackupRun)
                 .filter(
-                    BackupRun.started_at == started_at.replace(hour=4),
+                    BackupRun.started_at == cleanup_at,
                     BackupRun.backup_type == "cleanup",
                 )
                 .first()
@@ -143,7 +149,7 @@ def import_from_tracking_file(db: DBSession, tracking_path: str) -> int:
                 cleanup = BackupRun(
                     backup_type="cleanup",
                     status="success",
-                    started_at=started_at.replace(hour=4, minute=0),
+                    started_at=cleanup_at,
                     triggered_by="cron",
                 )
                 db.add(cleanup)
@@ -244,20 +250,23 @@ def enrich_from_stats(db: DBSession, stats_path: str) -> int:
 
     entries = parse_marker_lines(text)
 
-    # Now enrich database records with the extracted data
+    # Now enrich database records with the extracted data (log lines are local time)
+    tz = timefmt.zone(db)
     updated = 0
     for entry in entries:
         start = entry.get("start")
         if not start:
             continue
 
-        # Find matching daily_mirror record for this date
+        # Find matching daily_mirror record for this local date
+        day_start, day_end = timefmt.day_bounds_utc(start.date(), tz)
+        start = timefmt.to_utc_naive(start.replace(tzinfo=None), tz)
         run = (
             db.query(BackupRun)
             .filter(
                 BackupRun.backup_type == "daily_mirror",
-                BackupRun.started_at >= start.replace(hour=0, minute=0),
-                BackupRun.started_at <= start.replace(hour=23, minute=59),
+                BackupRun.started_at >= day_start,
+                BackupRun.started_at < day_end,
             )
             .first()
         )
@@ -268,6 +277,7 @@ def enrich_from_stats(db: DBSession, stats_path: str) -> int:
         total_size = entry.get("total_size")
         sent = entry.get("sent")
         end = entry.get("end")
+        end = timefmt.to_utc_naive(end.replace(tzinfo=None), tz) if end else None
 
         if total_size and not run.total_size_bytes:
             run.total_size_bytes = total_size

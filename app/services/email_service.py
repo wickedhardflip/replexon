@@ -8,6 +8,7 @@ from typing import Tuple
 
 from sqlalchemy.orm import Session as DBSession
 
+from app.services import timefmt
 from app.services.app_settings import get_config, get_secret
 
 SIGNATURE = '-- RePlexOn\n"Previously on your Plex server..."'
@@ -92,6 +93,7 @@ def notify_backup_result(db: DBSession, run) -> None:
     if not get_config(db)["email_recipient"]:
         return
 
+    tz = timefmt.zone(db)
     kind = run.backup_type.replace("_", " ")
     if failed:
         subject = f"Plex Backup FAILED - {kind}"
@@ -100,6 +102,7 @@ def notify_backup_result(db: DBSession, run) -> None:
     lines = [
         f"Status:      {'FAILED' if failed else 'OK'}",
         f"Type:        {kind} ({run.triggered_by})",
+        f"Started:     {timefmt.fmt_datetime(run.started_at)} ({timefmt.zone_name(tz)})",
         f"Duration:    {run.duration_display}",
         f"Total size:  {run.size_display}",
     ]

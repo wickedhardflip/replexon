@@ -1,17 +1,23 @@
 """Compute dashboard statistics from backup_runs."""
 
 import calendar
-from datetime import datetime, timedelta, timezone
+from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 
 from app.models.backup import BackupRun
+from app.services import timefmt
+
+
+def _cutoff(db: DBSession, days: int):
+    """Start of the "last N days" window: local midnight, N-1 days ago (naive UTC)."""
+    return timefmt.since_days_utc(days, timefmt.zone(db))
 
 
 def get_dashboard_stats(db: DBSession, days: int = 30) -> dict:
     """Compute summary stats for the dashboard."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = _cutoff(db, days)
 
     # Total backups in period
     total_backups = (
@@ -77,7 +83,7 @@ def get_dashboard_stats(db: DBSession, days: int = 30) -> dict:
 
 def get_backup_type_counts(db: DBSession, days: int = 30) -> dict:
     """Get backup counts grouped by type for chart."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = _cutoff(db, days)
     rows = (
         db.query(BackupRun.backup_type, func.count(BackupRun.id))
         .filter(BackupRun.started_at >= cutoff)
@@ -87,24 +93,27 @@ def get_backup_type_counts(db: DBSession, days: int = 30) -> dict:
     return {row[0]: row[1] for row in rows}
 
 
+def _by_local_day(rows, pick) -> list:
+    """Group (started_at, value) rows by the local day they started on; keep the max value per day."""
+    days = {}
+    for started_at, value in rows:
+        key = timefmt.local_day(started_at).isoformat()
+        days[key] = max(days.get(key, value), value)
+    return [pick(day, days[day]) for day in sorted(days)]
+
+
 def get_daily_sizes(db: DBSession, days: int = 30) -> list[dict]:
-    """Get daily backup sizes for bar chart."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    """Get daily backup sizes for bar chart (one bar per local day)."""
     rows = (
-        db.query(
-            func.date(BackupRun.started_at).label("day"),
-            func.max(BackupRun.total_size_bytes).label("size"),
-        )
+        db.query(BackupRun.started_at, BackupRun.total_size_bytes)
         .filter(
-            BackupRun.started_at >= cutoff,
+            BackupRun.started_at >= _cutoff(db, days),
             BackupRun.status == "success",
             BackupRun.total_size_bytes.isnot(None),
         )
-        .group_by(func.date(BackupRun.started_at))
-        .order_by(func.date(BackupRun.started_at))
         .all()
     )
-    return [{"date": str(row.day), "size": row.size} for row in rows]
+    return _by_local_day(rows, lambda day, size: {"date": day, "size": size})
 
 
 def get_recent_backups(db: DBSession, limit: int = 10) -> list[BackupRun]:
@@ -118,24 +127,18 @@ def get_recent_backups(db: DBSession, limit: int = 10) -> list[BackupRun]:
 
 
 def get_daily_durations(db: DBSession, days: int = 30) -> list[dict]:
-    """Get daily backup durations for trend chart."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    """Get daily backup durations for trend chart (one bar per local day)."""
     rows = (
-        db.query(
-            func.date(BackupRun.started_at).label("day"),
-            func.max(BackupRun.duration_seconds).label("duration"),
-        )
+        db.query(BackupRun.started_at, BackupRun.duration_seconds)
         .filter(
-            BackupRun.started_at >= cutoff,
+            BackupRun.started_at >= _cutoff(db, days),
             BackupRun.status == "success",
             BackupRun.backup_type == "daily_mirror",
             BackupRun.duration_seconds.isnot(None),
         )
-        .group_by(func.date(BackupRun.started_at))
-        .order_by(func.date(BackupRun.started_at))
         .all()
     )
-    return [{"date": str(row.day), "minutes": round(row.duration / 60, 1)} for row in rows]
+    return _by_local_day(rows, lambda day, secs: {"date": day, "minutes": round(secs / 60, 1)})
 
 
 def get_calendar_data(db: DBSession, months: int = 4) -> list[dict]:
@@ -146,7 +149,8 @@ def get_calendar_data(db: DBSession, months: int = 4) -> list[dict]:
       "statuses": {"1": "success", "5": "failure", ...}}]
     Days not in statuses = no backup attempt.
     """
-    today = datetime.now(timezone.utc).date()
+    tz = timefmt.zone(db)
+    today = timefmt.now_local(tz).date()
     result = []
 
     for i in range(months):
@@ -158,17 +162,14 @@ def get_calendar_data(db: DBSession, months: int = 4) -> list[dict]:
             year -= 1
 
         days_in = calendar.monthrange(year, month)[1]
-        month_start = datetime(year, month, 1, tzinfo=timezone.utc)
-        month_end = datetime(year, month, days_in, 23, 59, 59, tzinfo=timezone.utc)
+        month_start = timefmt.day_start_utc(date(year, month, 1), tz)
+        month_end = timefmt.day_bounds_utc(date(year, month, days_in), tz)[1]
 
         rows = (
-            db.query(
-                func.date(BackupRun.started_at).label("day"),
-                BackupRun.status,
-            )
+            db.query(BackupRun.started_at, BackupRun.status)
             .filter(
                 BackupRun.started_at >= month_start,
-                BackupRun.started_at <= month_end,
+                BackupRun.started_at < month_end,
                 BackupRun.backup_type == "daily_mirror",
             )
             .all()
@@ -176,10 +177,8 @@ def get_calendar_data(db: DBSession, months: int = 4) -> list[dict]:
 
         statuses = {}
         for row in rows:
-            day_str = str(row.day)
-            day_num = int(day_str.split("-")[2])
-            existing = statuses.get(day_num)
-            if existing == "failure":
+            day_num = timefmt.local_day(row.started_at, tz).day  # the local day, not the UTC one
+            if statuses.get(day_num) == "failure":
                 continue
             statuses[day_num] = row.status
 
@@ -204,7 +203,7 @@ def get_failure_clusters(db: DBSession, days: int = 30) -> list[dict]:
      {"type": "isolated", "date": "Apr 20",
       "message": "Isolated failure on Apr 20"}]
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = _cutoff(db, days)
     rows = (
         db.query(BackupRun.started_at, BackupRun.status)
         .filter(
@@ -240,7 +239,7 @@ def get_failure_clusters(db: DBSession, days: int = 30) -> list[dict]:
 
 
 def _emit_cluster(clusters: list, start_dt, end_dt, count: int):
-    start_str = start_dt.strftime("%b %d")
+    start_str = timefmt.fmt_date(start_dt)
     if count == 1:
         clusters.append({
             "type": "isolated",
@@ -249,7 +248,7 @@ def _emit_cluster(clusters: list, start_dt, end_dt, count: int):
             "message": f"Isolated failure on {start_str}",
         })
     else:
-        end_str = end_dt.strftime("%b %d")
+        end_str = timefmt.fmt_date(end_dt)
         clusters.append({
             "type": "streak",
             "count": count,

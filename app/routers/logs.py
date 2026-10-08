@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session as DBSession
 
+from app.services import timefmt
 from app.dependencies import get_current_user, get_db
 from app.models.backup import BackupRun
 from app.models.user import User
@@ -14,6 +15,7 @@ from app.utils.security import generate_csrf_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+timefmt.register(templates.env)
 
 
 @router.get("/logs", response_class=HTMLResponse)
@@ -38,16 +40,17 @@ async def logs_page(
         query = query.filter(BackupRun.status == status)
     if search:
         query = query.filter(BackupRun.raw_log.contains(search))
+    tz = timefmt.zone(db)  # the date pickers mean local days
     if date_from:
         try:
-            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-            query = query.filter(BackupRun.started_at >= dt_from)
+            day = datetime.strptime(date_from, "%Y-%m-%d").date()
+            query = query.filter(BackupRun.started_at >= timefmt.day_start_utc(day, tz))
         except ValueError:
             pass
     if date_to:
         try:
-            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-            query = query.filter(BackupRun.started_at <= dt_to)
+            day = datetime.strptime(date_to, "%Y-%m-%d").date()
+            query = query.filter(BackupRun.started_at < timefmt.day_bounds_utc(day, tz)[1])
         except ValueError:
             pass
 

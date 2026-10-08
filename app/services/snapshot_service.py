@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
+from app.services import timefmt
 from app.services.app_settings import get_config, get_setting, script_env, set_setting
 
 logger = logging.getLogger("replexon")
@@ -50,10 +51,10 @@ def fetch_snapshots(db: DBSession) -> list:
         if not match:
             continue
         try:
-            snap_date = datetime.strptime(match.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            datetime.strptime(match.group(1), "%Y-%m-%d")
         except ValueError:
             continue
-        snapshots.append({"date": match.group(1), "age_days": (now - snap_date).days})
+        snapshots.append({"date": match.group(1)})
 
     snapshots.sort(key=lambda s: s["date"], reverse=True)
     set_setting(db, "snapshot_list", json.dumps(snapshots))
@@ -67,6 +68,9 @@ def get_cached_snapshots(db: DBSession) -> dict:
         snapshots = json.loads(get_setting(db, "snapshot_list", "[]"))
     except (json.JSONDecodeError, TypeError):
         snapshots = []
+    today = timefmt.now_local(timefmt.zone(db)).date()  # folder names are local dates
+    for snap in snapshots:
+        snap["age_days"] = (today - datetime.strptime(snap["date"], "%Y-%m-%d").date()).days
     return {
         "snapshots": snapshots,
         "count": len(snapshots),

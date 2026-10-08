@@ -49,7 +49,7 @@
             <tbody>
                 {% for log in email_logs %}
                 <tr>
-                    <td>{{ log.sent_at.strftime('%b %d, %I:%M %p') }}</td>
+                    <td>{{ log.sent_at | datetime }}</td>
                     <td class="font-mono text-xs">{{ log.recipient }}</td>
                     <td>{{ log.subject }}</td>
                     <td>

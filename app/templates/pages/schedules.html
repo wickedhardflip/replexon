@@ -33,8 +33,8 @@
                     <span class="chip {{ 'good' if entry.enabled else '' }}">{{ 'ON' if entry.enabled else 'OFF' }}</span></h4>
                 <div class="text-sm text-muted">{{ entry.schedule_display }}</div>
                 <div class="text-xs text-muted" style="margin-top: 0.25rem;">
-                    Next: {{ entry.next_run[:16] | replace('T', ' ') if entry.next_run else '-' }}
-                    &middot; Last: {{ entry.last_run[:16] | replace('T', ' ') if entry.last_run else '-' }}
+                    Next: {{ entry.next_run | datetime }}
+                    &middot; Last: {{ entry.last_run | datetime }}
                 </div>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
@@ -47,13 +47,13 @@
     </form>
 </div>
 {% endfor %}
-<p class="text-xs text-muted">Five-field cron: minute hour day month weekday. Presets are under <a href="/settings">Settings</a>.</p>
+<p class="text-xs text-muted">Five-field cron: minute hour day month weekday, in {{ tz_name() }}. Presets and the time zone are under <a href="/settings">Settings</a>.</p>
 
 <div class="card" style="margin-top: 2rem;">
     <div class="flex justify-between items-center" style="margin-bottom: 1rem;">
         <h3 style="margin-bottom: 0;">Weekly Snapshots</h3>
         {% if snapshot_data.last_check %}
-        <span class="text-xs text-muted">Last checked: {{ snapshot_data.last_check[:16] | replace('T', ' ') }}</span>
+        <span class="text-xs text-muted">Last checked: {{ snapshot_data.last_check | datetime }}</span>
         {% endif %}
     </div>
 

@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session as DBSession
 
+from app.services import timefmt
 from app.config import settings
 from app.dependencies import get_current_user, get_db
 from app.models.setting import AppSetting
@@ -27,6 +28,7 @@ from app.services.nas_health import get_nas_status
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+timefmt.register(templates.env)
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -71,7 +73,7 @@ async def dashboard(
             "selected_days": days,
             "backup_destination": backup_destination,
             "plex_data_path": plex_data_path,
-            "next_backup_iso": next_backup,
+            "next_backup": next_backup,
             "nas_status": nas_status,
             "failure_clusters": failure_clusters,
             "backup_running": not can_backup,
