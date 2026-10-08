@@ -1,19 +1,22 @@
-"""In-app backup scheduler: cron expressions stored in AppSetting, run in the container's TZ.
+"""In-app backup scheduler: cron expressions stored in AppSetting, evaluated in the configured time zone.
 
 Replaces the root crontab. The background task in main.py calls check_and_run_due_jobs()
-every minute; due jobs start through backup_runner (one job at a time).
+every minute; due jobs start through backup_runner (one job at a time). The zone is re-read
+on every tick, so changing the Time zone setting takes effect within a minute, no restart.
+last_run is stored as an aware UTC ISO string (older installs: naive server-local time).
 """
 
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone, tzinfo
 from typing import List, Optional
 
 from croniter import croniter
 from sqlalchemy.orm import Session as DBSession
 
 from app.models.setting import AppSetting
+from app.services import timefmt
 
 logger = logging.getLogger("replexon.scheduler")
 
@@ -84,10 +87,11 @@ class ScheduleEntry:
             return self.cron_expr
 
     @property
-    def next_run(self) -> Optional[str]:
+    def next_run(self) -> Optional[datetime]:
+        """Next fire time, aware, in the configured zone."""
         if not self.enabled or not valid_cron(self.cron_expr):
             return None
-        return croniter(self.cron_expr, datetime.now()).get_next(datetime).isoformat()
+        return croniter(self.cron_expr, timefmt.now_local()).get_next(datetime)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ScheduleEntry":
@@ -146,25 +150,47 @@ def update_schedule(db: DBSession, schedule_id: str, cron_expr: str, enabled: bo
         if entry["id"] == schedule_id:
             entry["cron_expr"] = cron_expr
             entry["enabled"] = enabled
-            entry["last_run"] = datetime.now().isoformat()  # count from now, no surprise catch-up run
+            entry["last_run"] = _now_iso()  # count from now, no surprise catch-up run
             _write(db, raw)
             return True
     return False
 
 
-def get_next_backup_time(db: DBSession) -> Optional[str]:
+def restart_counting(db: DBSession) -> None:
+    """After a time zone change: every job counts from now, so nothing fires as a catch-up."""
+    raw = _read(db)
+    for entry in raw:
+        entry["last_run"] = _now_iso()
+    if raw:
+        _write(db, raw)
+
+
+def get_next_backup_time(db: DBSession) -> Optional[datetime]:
+    timefmt.zone(db)
     times = [s.next_run for s in get_schedules(db) if s.kind == "backup" and s.next_run]
     return min(times) if times else None
 
 
-def due_jobs(raw: list, now: datetime) -> list:
-    """Ids of enabled jobs whose next fire time since last_run has passed."""
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_last_run(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    return parsed if parsed.tzinfo else parsed.astimezone()  # legacy: naive server-local time
+
+
+def due_jobs(raw: list, now: datetime, tz: Optional[tzinfo] = None) -> list:
+    """Ids of enabled jobs whose next fire time (cron read in zone tz) since last_run has passed."""
+    tz = tz or timefmt.zone()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=tz)
     due = []
     for entry in raw:
         expr = entry.get("cron_expr") or ""
         if not entry.get("enabled", True) or not valid_cron(expr) or not entry.get("last_run"):
             continue
-        last_run = datetime.fromisoformat(entry["last_run"])
+        last_run = _parse_last_run(entry["last_run"]).astimezone(tz)
         if croniter(expr, last_run).get_next(datetime) <= now:
             due.append(entry["id"])
     return due
@@ -175,7 +201,8 @@ def check_and_run_due_jobs(db: DBSession) -> None:
     from app.services.backup_runner import start_job
 
     raw = _read(db)
-    now = datetime.now()
+    tz = timefmt.zone(db)  # re-read every tick: a changed Time zone applies without a restart
+    now = datetime.now(timezone.utc)
     changed = False
 
     for entry in raw:  # first sight of a job: start counting from now
@@ -184,7 +211,7 @@ def check_and_run_due_jobs(db: DBSession) -> None:
             changed = True
 
     if get_setting(db, "setup_complete"):
-        for job_id in due_jobs(raw, now):
+        for job_id in due_jobs(raw, now, tz):
             entry = next(e for e in raw if e["id"] == job_id)
             kind = entry.get("kind", "cleanup" if "cleanup" in job_id else "backup")
             result = start_job(db, kind, "scheduled")

@@ -1,5 +1,5 @@
 """In-app scheduler: presets, validation, due-job detection, and starting jobs through the runner."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -46,12 +46,12 @@ def test_schedule_display(expr, expected):
 
 def test_due_jobs():
     raw = [
-        {"id": "a", "cron_expr": "0 3 * * *", "enabled": True, "last_run": "2026-10-06T02:00:00"},
-        {"id": "b", "cron_expr": "0 3 * * *", "enabled": False, "last_run": "2026-10-06T02:00:00"},
-        {"id": "c", "cron_expr": "0 3 * * *", "enabled": True, "last_run": "2026-10-06T03:30:00"},
+        {"id": "a", "cron_expr": "0 3 * * *", "enabled": True, "last_run": "2026-10-06T02:00:00+00:00"},
+        {"id": "b", "cron_expr": "0 3 * * *", "enabled": False, "last_run": "2026-10-06T02:00:00+00:00"},
+        {"id": "c", "cron_expr": "0 3 * * *", "enabled": True, "last_run": "2026-10-06T03:30:00+00:00"},
         {"id": "d", "cron_expr": "0 3 * * *", "enabled": True, "last_run": None},
     ]
-    assert sched.due_jobs(raw, datetime(2026, 10, 6, 3, 0, 30)) == ["a"]
+    assert sched.due_jobs(raw, datetime(2026, 10, 6, 3, 0, 30, tzinfo=timezone.utc), timezone.utc) == ["a"]
 
 
 def test_next_backup_time_ignores_disabled_and_cleanup(db):
