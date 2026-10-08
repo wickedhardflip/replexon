@@ -15,7 +15,7 @@ knobs and are listed here.
 | Where backups go | A folder (local disk or mounted share), or a NAS rsync daemon (address, user, module, password). |
 | Weekly snapshots | How many Sunday snapshots to keep (1-52). |
 | Schedule | Presets or any 5-field cron expression, for the backup and the snapshot cleanup, read in the Time zone below. |
-| Time zone | IANA name (e.g. `America/New_York`). Schedules run in it and every page and email shows times in it; the setup wizard suggests your browser's zone. Changing it applies at once, no restart. Starts from `TZ`, else UTC. |
+| Time zone | IANA name (e.g. `America/New_York`). Schedules run in it and every page and email shows times in it; the setup wizard suggests your browser's zone. Changing it applies at once, no restart. Starts from `TZ`, else UTC. A schedule inside the hour that repeats when clocks go back (e.g. `30 1 * * *` in New York) runs twice that night. |
 | Email | SMTP host, port, encryption (STARTTLS, SSL/TLS, none), login, from/to, and when to send. Has a test button. |
 
 Passwords (SMTP and rsync) are encrypted before they are stored and are never sent
