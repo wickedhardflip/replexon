@@ -132,11 +132,11 @@ from 1.x (remove the old crontab lines).
 
 | Dashboard | Backup Logs |
 |:-:|:-:|
-| ![Dashboard](docs/screenshots/dashboard.png?v=3) | ![Logs](docs/screenshots/logs.png?v=3) |
+| ![Dashboard](docs/screenshots/dashboard.png?v=4) | ![Logs](docs/screenshots/logs.png?v=4) |
 
 | Schedules | Settings |
 |:-:|:-:|
-| ![Schedules](docs/screenshots/schedules.png?v=3) | ![Settings](docs/screenshots/settings.png?v=3) |
+| ![Schedules](docs/screenshots/schedules.png?v=4) | ![Settings](docs/screenshots/settings.png?v=4) |
 
 ## What you get
 
