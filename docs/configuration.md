@@ -14,7 +14,8 @@ knobs and are listed here.
 | Database safety | **Safe copy** (default) or **Pause Plex during the copy**. See below. |
 | Where backups go | A folder (local disk or mounted share), or a NAS rsync daemon (address, user, module, password). |
 | Weekly snapshots | How many Sunday snapshots to keep (1-52). |
-| Schedule | Presets or any 5-field cron expression, for the backup and the snapshot cleanup. Times use the `TZ` time zone. |
+| Schedule | Presets or any 5-field cron expression, for the backup and the snapshot cleanup, read in the Time zone below. |
+| Time zone | IANA name (e.g. `America/New_York`). Schedules run in it and every page and email shows times in it; the setup wizard suggests your browser's zone. Changing it applies at once, no restart. Starts from `TZ`, else UTC. |
 | Email | SMTP host, port, encryption (STARTTLS, SSL/TLS, none), login, from/to, and when to send. Has a test button. |
 
 Passwords (SMTP and rsync) are encrypted before they are stored and are never sent
@@ -41,7 +42,7 @@ those files mid-write can produce a backup that will not open.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TZ` | `UTC` | Time zone for schedules and log times. |
+| `TZ` | `UTC` | Only the starting value of the **Time zone** setting (an invalid name falls back to UTC). After that the setting wins. The backup script's own log lines (`=== Plex Backup Started: ... ===`, `plex-backup.log`) use the container's `TZ`, so keep the two the same. |
 | `PUID` / `PGID` | `1000` | Docker only. User and group RePlexOn runs as. Match your Plex container so the Plex folder is readable. Plex installed as a snap or package has root-only files (`Preferences.xml`); use `PUID=0` and `PGID=0` there and RePlexOn stays root inside the container. |
 | `SECRET_KEY` | generated | Signs sessions and encrypts stored passwords. When unset it is generated once into `DATA_DIR/.secret_key` (mode 600). If you lose that file you must re-enter the SMTP and rsync passwords. |
 | `DATA_DIR` | `/data` | Database, logs, secret key. |

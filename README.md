@@ -31,7 +31,7 @@ services:
     image: ghcr.io/wickedhardflip/replexon:latest
     container_name: replexon
     environment:
-      - TZ=America/New_York      # schedules run in this time zone
+      - TZ=America/New_York      # starting time zone (change it later in Settings)
       - PUID=1000                # same user/group IDs as your Plex
       - PGID=1000
     volumes:

@@ -23,6 +23,12 @@ Docker is now the main way to run RePlexOn. The separate Docker edition is merge
 - Bare-metal install moved to `native/`; the installer no longer installs msmtp or edits crontab.
 - Backup and cleanup scripts read their settings from the environment instead of being edited.
 - Python 3.10 or newer is required.
+- Schedules run in the new **Time zone** setting (Settings > Schedule, and the setup wizard, which suggests the browser's zone). `TZ` is only its starting value. Changing it applies at once, no restart.
+
+### Fixed
+- Times were shown in UTC: a 3:00 AM backup read 7:00 AM (New York). Every page and email now shows the configured time zone, in one format (`Oct 8, 2026, 3:00 AM`), and charts, the backup calendar, log date filters and failure notes count by the local day. Storage is unchanged (UTC).
+- The Logs page shows a single time, not "8:00 – 8:00", for instant entries such as snapshots.
+- Importing the 1.x tracking file and log stored local times as if they were UTC; they are now converted (rows imported earlier are left as they are).
 
 ### Removed
 - msmtp support, crontab reading/editing (`CRON_EDIT_ENABLED`, `CRON_USER`), `config.example.yaml`.
