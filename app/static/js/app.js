@@ -32,6 +32,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Time zone field: pre-fill from the browser in the wizard, live "time there now" preview
+    document.querySelectorAll('[data-tz-input]').forEach(function(input) {
+        var preview = input.form && input.form.querySelector('[data-tz-preview]');
+        if (input.hasAttribute('data-tz-from-browser')) {
+            try {
+                var browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                if (browserZone && document.querySelector('#zone-names option[value="' + browserZone + '"]')) {
+                    input.value = browserZone;
+                }
+            } catch (e) {}
+        }
+        function showTime() {
+            if (!preview) return;
+            try {
+                preview.textContent = new Intl.DateTimeFormat('en-US', {
+                    timeZone: input.value.trim(), weekday: 'short', hour: 'numeric', minute: '2-digit',
+                }).format(new Date());
+                input.setCustomValidity('');
+            } catch (e) {
+                preview.textContent = 'unknown zone';
+                input.setCustomValidity('Unknown time zone. Pick one from the list, e.g. America/New_York.');
+            }
+        }
+        input.addEventListener('input', showTime);
+        showTime();
+        setInterval(showTime, 30000);
+    });
+
     // Hamburger menu toggle
     var hamburger = document.getElementById('nav-hamburger');
     var navLinks = document.getElementById('nav-links');

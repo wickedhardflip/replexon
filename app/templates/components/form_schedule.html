@@ -36,7 +36,18 @@
     <label class="text-sm" style="display: block; margin: 0.5rem 0;">
         <input type="checkbox" name="backup_enabled" value="on" {% if backup_enabled %}checked{% endif %}> Scheduled runs enabled
     </label>
-    <p class="help">Times are in {{ tz }}. Set <code>TZ</code> in compose.yml to change it.</p>
+
+    <div class="sec">Time zone</div>
+    <div class="form-group">
+        <label class="form-label" for="timezone">Schedules run, and every time is shown, in this zone</label>
+        <input type="text" id="timezone" name="timezone" class="form-input settings-input" list="zone-names"
+               value="{{ cfg.timezone }}" required autocomplete="off" spellcheck="false"
+               data-tz-input {% if step is defined and not timezone_saved %}data-tz-from-browser{% endif %}>
+        <datalist id="zone-names">
+            {% for name in zone_names %}<option value="{{ name }}">{% endfor %}
+        </datalist>
+        <p class="help">IANA name, e.g. America/New_York or Europe/London. Time there now: <span data-tz-preview>-</span></p>
+    </div>
 
     <div class="form-actions">
         <button type="submit" class="btn btn-primary btn-sm">{{ submit_label | default('Save') }}</button>

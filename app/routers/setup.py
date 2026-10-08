@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.orm import Session as DBSession
 
+from app.services import timefmt
 from app.dependencies import get_current_user, get_db
 from app.models.user import User
 from app.services import app_settings as aps
@@ -26,6 +27,7 @@ from app.utils.security import generate_csrf_token, validate_csrf_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+timefmt.register(templates.env)
 
 STEPS = ["admin", "plex", "items", "destination", "schedule", "email", "done"]
 STEP_TITLES = {
@@ -71,7 +73,8 @@ def form_context(db: DBSession) -> dict:
         "backup_enabled": backup.enabled if backup else True,
         "cleanup_cron": cleanup_cron,
         "cleanup_preset": preset_for(cleanup_cron, CLEANUP_PRESETS),
-        "tz": os.environ.get("TZ", "the server's local time"),
+        "zone_names": timefmt.zone_names(),
+        "timezone_saved": bool(aps.get_setting(db, "timezone")),  # the wizard pre-fills from the browser if not
         "csrf_token": generate_csrf_token(),
     }
 
@@ -287,6 +290,10 @@ def _save_schedule(db: DBSession, form) -> Optional[str]:
         return "Backup schedule is not a valid 5-field cron expression"
     if not valid_cron(cleanup_cron):
         return "Cleanup schedule is not a valid 5-field cron expression"
+    if "timezone" in form:
+        error = aps.set_timezone(db, _f(form, "timezone"))
+        if error:
+            return error
     enabled = form.get("backup_enabled") == "on"
     initialize_schedules(db)  # idempotent; makes sure both entries exist
     if not (update_schedule(db, "daily_backup", backup_cron, enabled)
