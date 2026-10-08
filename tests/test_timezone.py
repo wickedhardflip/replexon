@@ -180,3 +180,61 @@ def test_pages_show_local_time_and_follow_a_change(client):  # noqa: F811
     assert "7:00 AM – 7:15 AM" in client.get("/logs").text
     page = client.get("/settings").text
     assert 'value="UTC"' in page and f'<option value="{NY}">' in page
+
+
+# ---------- one-time fix of 1.x-imported times ----------
+
+@pytest.fixture
+def filedb(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.database import Base
+    engine = create_engine(f"sqlite:///{tmp_path / 'replexon.db'}")
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(bind=engine)()
+    app_settings.set_setting(session, "timezone", NY)
+    yield session, tmp_path / "replexon.db.pre-tzfix"
+    session.close()
+    engine.dispose()
+
+
+def _add(db, started, finished=None, by="cron"):
+    run = BackupRun(backup_type="daily_mirror", status="success", started_at=started,
+                    finished_at=finished, triggered_by=by)
+    db.add(run)
+    db.commit()
+    return run.id
+
+
+def test_imported_local_times_become_utc_once(filedb):
+    from app.services.log_parser import migrate_import_times
+    db, backup = filedb
+    winter = _add(db, datetime(2026, 1, 25, 3, 0), datetime(2026, 1, 25, 3, 14, 7))   # EST: +5h
+    summer = _add(db, datetime(2026, 7, 5, 3, 0))                                       # EDT: +4h
+    new = _add(db, datetime(2026, 10, 8, 7, 0, 46, 450057), by="scheduled")             # 2.x row
+    odd_end = _add(db, datetime(2026, 2, 1, 3, 0), datetime(2026, 2, 1, 8, 9, 1, 123))  # end not whole-second
+
+    assert migrate_import_times(db) == 3
+    assert backup.exists()
+    db.expire_all()
+    get = lambda i: db.get(BackupRun, i)  # noqa: E731
+    assert (get(winter).started_at, get(winter).finished_at) == (datetime(2026, 1, 25, 8, 0), datetime(2026, 1, 25, 8, 14, 7))
+    assert get(summer).started_at == datetime(2026, 7, 5, 7, 0) and get(summer).finished_at is None
+    assert get(new).started_at == datetime(2026, 10, 8, 7, 0, 46, 450057)
+    assert get(odd_end).started_at == datetime(2026, 2, 1, 8, 0)
+    assert get(odd_end).finished_at == datetime(2026, 2, 1, 8, 9, 1, 123)
+
+    stamp = backup.stat().st_mtime_ns
+    assert migrate_import_times(db) == 0  # second start: nothing changes
+    db.expire_all()
+    assert get(winter).started_at == datetime(2026, 1, 25, 8, 0)
+    assert backup.stat().st_mtime_ns == stamp
+
+
+def test_migration_on_an_empty_db_is_a_no_op(filedb):
+    from app.services.log_parser import IMPORT_TIMES_FLAG, migrate_import_times
+    db, backup = filedb
+    _add(db, datetime(2026, 10, 8, 7, 0, 46, 450057), by="manual")
+    assert migrate_import_times(db) == 0
+    assert not backup.exists()
+    assert app_settings.get_setting(db, IMPORT_TIMES_FLAG) == "1"

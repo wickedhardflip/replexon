@@ -330,3 +330,65 @@ def parse_incremental(db: DBSession, log_path: str) -> int:
         if stats_path:
             enrich_from_stats(db, stats_path)
     return count
+
+
+IMPORT_TIMES_FLAG = "import_times_utc_v1"
+_STORED_FMT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def migrate_import_times(db: DBSession) -> int:
+    """One-time fix: 1.x-imported rows stored local wall-clock time as if it were UTC.
+
+    Those rows are triggered_by='cron' with whole-second times ('... 03:00:00.000000'); 2.x rows
+    have real microseconds. Converts them local -> UTC in the zone in effect now, in one
+    transaction, after copying the SQLite file to <db>.pre-tzfix. Returns the rows converted.
+    """
+    from sqlalchemy import text
+    from app.services.app_settings import get_setting, set_setting
+
+    if get_setting(db, IMPORT_TIMES_FLAG):
+        return 0
+    rows = db.execute(text(
+        "SELECT id, started_at, finished_at FROM backup_runs "
+        "WHERE triggered_by = 'cron' AND started_at LIKE '%.000000'")).all()
+    if not rows:
+        set_setting(db, IMPORT_TIMES_FLAG, "1")
+        return 0
+
+    _backup_sqlite(db, ".pre-tzfix")
+    tz = timefmt.zone(db)
+
+    def fix(value):
+        if not isinstance(value, str) or not value.endswith(".000000"):
+            return value
+        try:
+            local = datetime.strptime(value, _STORED_FMT)
+        except ValueError:
+            return value  # odd value: leave it alone
+        return timefmt.to_utc_naive(local, tz).strftime(_STORED_FMT)  # fold=0 for DST edge times
+
+    try:
+        for row_id, started, finished in rows:
+            db.execute(text("UPDATE backup_runs SET started_at = :s, finished_at = :f WHERE id = :i"),
+                       {"s": fix(started), "f": fix(finished), "i": row_id})
+        from app.models.setting import AppSetting
+        db.merge(AppSetting(key=IMPORT_TIMES_FLAG, value="1"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return len(rows)
+
+
+def _backup_sqlite(db: DBSession, suffix: str) -> None:
+    """Consistent copy (WAL included) of the SQLite file next to itself, once."""
+    import sqlite3
+    path = db.get_bind().url.database
+    if not path or path == ":memory:" or Path(path + suffix).exists():
+        return
+    src, dst = sqlite3.connect(path), sqlite3.connect(path + suffix)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()

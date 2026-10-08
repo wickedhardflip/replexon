@@ -118,6 +118,11 @@ def _startup_db_tasks(db) -> None:
 
     initialize_schedules(db)
 
+    from app.services.log_parser import migrate_import_times
+    fixed = migrate_import_times(db)  # before any new import, so its same-day check sees UTC
+    if fixed:
+        logger.info("Converted %d imported 1.x backup times from local time to UTC", fixed)
+
     stale = db.query(BackupRun).filter(BackupRun.status == "running").all()
     for run in stale:
         run.status = "failure"
